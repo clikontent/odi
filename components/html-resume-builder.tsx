@@ -7,7 +7,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
-  Download,
   Save,
   ZoomIn,
   ZoomOut,
@@ -15,7 +14,6 @@ import {
   Eye,
   Maximize,
   Minimize,
-  FileIcon,
   Undo,
   Redo,
   Sparkles,
@@ -27,7 +25,6 @@ import {
   AlignRight,
   ImageIcon,
 } from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -742,43 +739,6 @@ const HTMLResumeBuilder = ({ templateHtml, templateCss, onSave }: HTMLResumeBuil
               </div>
             </DialogContent>
           </Dialog>
-
-          {lastSaved && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export (Premium Feature)
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem
-                  onClick={() =>
-                    toast({
-                      title: "Premium Feature",
-                      description: "Please purchase this resume to download it.",
-                      variant: "default",
-                    })
-                  }
-                >
-                  <FileIcon className="h-4 w-4 mr-2" />
-                  Export as PDF
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    toast({
-                      title: "Premium Feature",
-                      description: "Please purchase this resume to download it.",
-                      variant: "default",
-                    })
-                  }
-                >
-                  <FileIcon className="h-4 w-4 mr-2" />
-                  Export as Word
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
 
           <Button variant="outline" onClick={toggleFullscreen}>
             {isFullscreen ? (

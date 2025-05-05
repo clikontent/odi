@@ -1746,8 +1746,6 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
           <ZoomIn className="h-4 w-4" />
         </Button>
         <span className="text-sm">{zoom}%</span>
-
-        {/* Remove the export PDF button */}
       </div>
     </div>
   )
