@@ -290,85 +290,26 @@ const HTMLResumeBuilder = ({ templateHtml, templateCss, onSave }: HTMLResumeBuil
 
   // Export to PDF
   const exportToPdf = async () => {
-    if (!isClient || !previewRef.current) return
+    toast({
+      title: "Premium Feature",
+      description: "Please purchase this resume to download it. The cost is KES 500.",
+      variant: "default",
+    })
 
-    try {
-      const html2pdfModule = await import("html2pdf.js")
-      const html2pdf = html2pdfModule.default
-
-      // Clone the content to avoid modifying the original
-      const element = previewRef.current.cloneNode(true) as HTMLElement
-
-      // Add CSS to the element
-      const style = document.createElement("style")
-      style.textContent = templateCss
-      element.appendChild(style)
-
-      const opt = {
-        margin: 0,
-        filename: "resume.pdf",
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      }
-
-      html2pdf().set(opt).from(element).save()
-
-      toast({
-        title: "PDF Exported",
-        description: "Your resume has been exported as a PDF.",
-      })
-    } catch (error) {
-      console.error("Error exporting to PDF:", error)
-      toast({
-        title: "Export Failed",
-        description: "Failed to export PDF. Please try again.",
-        variant: "destructive",
-      })
-    }
+    // Redirect to payment page or show payment modal
+    // This is a placeholder - you would implement the actual payment flow
   }
 
   // Export to Word (DOCX)
   const exportToWord = async () => {
-    if (!isClient) return
+    toast({
+      title: "Premium Feature",
+      description: "Please purchase this resume to download it. The cost is KES 500.",
+      variant: "default",
+    })
 
-    try {
-      const fileSaverModule = await import("file-saver")
-      const saveAs = fileSaverModule.saveAs
-
-      // Create a new Blob with HTML content
-      const preHtml = `<!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Resume</title>
-            <style>
-              ${templateCss}
-              body {
-                font-family: Arial, sans-serif;
-              }
-            </style>
-          </head>
-          <body>`
-      const postHtml = `</body></html>`
-
-      const fullHtml = preHtml + editableHtml + postHtml
-
-      const blob = new Blob([fullHtml], { type: "application/msword" })
-      saveAs(blob, "resume.doc")
-
-      toast({
-        title: "Word Document Exported",
-        description: "Your resume has been exported as a Word document.",
-      })
-    } catch (error) {
-      console.error("Error exporting to Word:", error)
-      toast({
-        title: "Export Failed",
-        description: "Failed to export Word document. Please try again.",
-        variant: "destructive",
-      })
-    }
+    // Redirect to payment page or show payment modal
+    // This is a placeholder - you would implement the actual payment flow
   }
 
   // Apply styles to selected element
@@ -807,15 +748,31 @@ const HTMLResumeBuilder = ({ templateHtml, templateCss, onSave }: HTMLResumeBuil
               <DropdownMenuTrigger asChild>
                 <Button variant="outline">
                   <Download className="h-4 w-4 mr-2" />
-                  Export
+                  Export (Premium Feature)
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                <DropdownMenuItem onClick={exportToPdf}>
+                <DropdownMenuItem
+                  onClick={() =>
+                    toast({
+                      title: "Premium Feature",
+                      description: "Please purchase this resume to download it.",
+                      variant: "default",
+                    })
+                  }
+                >
                   <FileIcon className="h-4 w-4 mr-2" />
                   Export as PDF
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={exportToWord}>
+                <DropdownMenuItem
+                  onClick={() =>
+                    toast({
+                      title: "Premium Feature",
+                      description: "Please purchase this resume to download it.",
+                      variant: "default",
+                    })
+                  }
+                >
                   <FileIcon className="h-4 w-4 mr-2" />
                   Export as Word
                 </DropdownMenuItem>

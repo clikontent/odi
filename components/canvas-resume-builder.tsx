@@ -110,6 +110,7 @@ const Element = ({
   onMoveForward,
   onMoveBackward,
   canvasRef,
+  page,
 }) => {
   const [editing, setEditing] = useState(false)
   const [content, setContent] = useState(element.content)
@@ -180,15 +181,23 @@ const Element = ({
         const canvasRect = canvasRef.current.getBoundingClientRect()
 
         // Calculate new position
-        const newX = e.clientX - dragOffset.x + canvasRect.left
-        const newY = e.clientY - dragOffset.y + canvasRect.top
+        const newX = Math.max(0, e.clientX - dragOffset.x + canvasRect.left)
+        const newY = Math.max(0, e.clientY - dragOffset.y + canvasRect.top)
 
-        // Update element position
-        onUpdate({
+        // Create a temporary element with the new position
+        const tempElement = {
           ...element,
-          x: Math.max(0, newX),
-          y: Math.max(0, newY),
-        })
+          x: newX,
+          y: newY,
+        }
+
+        // Check for collisions with other elements
+        const hasCollision = checkForCollision(tempElement, page.elements)
+
+        // Only update if there's no collision
+        if (!hasCollision) {
+          onUpdate(tempElement)
+        }
       } else if (resizing) {
         const dx = e.clientX - initialMousePosition.x
         const dy = e.clientY - initialMousePosition.y
@@ -272,6 +281,8 @@ const Element = ({
     initialPosition,
     initialMousePosition,
     canvasRef,
+    page.elements,
+    page,
   ])
 
   const renderContent = () => {
@@ -336,7 +347,7 @@ const Element = ({
     <div
       ref={elementRef}
       className={cn(
-        "absolute",
+        "absolute border border-transparent hover:border-gray-200 rounded-md shadow-sm",
         isDragging && "opacity-50",
         isSelected && "ring-2 ring-primary ring-offset-2",
         element.locked ? "cursor-not-allowed" : "cursor-move",
@@ -356,7 +367,7 @@ const Element = ({
       onMouseDown={handleMouseDown}
       onDoubleClick={() => !element.locked && setEditing(true)}
     >
-      {renderContent()}
+      <div className="w-full h-full overflow-hidden">{renderContent()}</div>
 
       {isSelected && !editing && (
         <>
@@ -483,6 +494,7 @@ const Canvas = ({
   onMoveForward,
   onMoveBackward,
   onAddElement,
+  checkForCollision,
 }) => {
   const canvasRef = useRef(null)
 
@@ -617,6 +629,7 @@ const Canvas = ({
           onMoveForward={onMoveForward}
           onMoveBackward={onMoveBackward}
           canvasRef={canvasRef}
+          page={page}
         />
       ))}
     </div>
@@ -1332,7 +1345,8 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
     }
   }
 
-  // Export to PDF
+  // Comment out or remove the exportToPdf function
+  /*
   const exportToPdf = async () => {
     try {
       const html2pdfModule = await import("html2pdf.js")
@@ -1375,6 +1389,7 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
       })
     }
   }
+  */
 
   // Handle toolbar item drag start
   const handleToolbarDragStart = (e, type) => {
@@ -1706,6 +1721,7 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
                   onMoveForward={handleMoveForward}
                   onMoveBackward={handleMoveBackward}
                   onAddElement={handleAddElement}
+                  checkForCollision={checkForCollision}
                 />
               )}
             </div>
@@ -1731,17 +1747,28 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
         </Button>
         <span className="text-sm">{zoom}%</span>
 
-        {lastSaved && (
-          <div className="ml-4">
-            <Button variant="outline" size="sm" onClick={exportToPdf}>
-              <FileIcon className="h-4 w-4 mr-2" />
-              Export PDF
-            </Button>
-          </div>
-        )}
+        {/* Remove the export PDF button */}
       </div>
     </div>
   )
+}
+
+const checkForCollision = (newElement, currentElements) => {
+  // Skip collision check for the element being moved
+  const otherElements = currentElements.filter((el) => el.id !== newElement.id)
+
+  for (const element of otherElements) {
+    // Simple box collision detection
+    if (
+      newElement.x < element.x + element.width &&
+      newElement.x + newElement.width > element.x &&
+      newElement.y < element.y + element.height &&
+      newElement.y + newElement.height > element.y
+    ) {
+      return true // Collision detected
+    }
+  }
+  return false // No collision
 }
 
 export default CanvasResumeBuilder

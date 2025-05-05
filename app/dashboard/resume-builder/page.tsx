@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react"
+import { Loader2, ArrowLeft, Check, FileIcon } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getResumeTemplates, getResumeTemplateById } from "@/lib/templates"
 import type { ResumeTemplate } from "@/lib/supabase"
@@ -42,6 +42,7 @@ export default function ResumeBuilder() {
   const [isClient, setIsClient] = useState(false)
   const [hasSaved, setHasSaved] = useState(false)
   const [builderType, setBuilderType] = useState<"html" | "placeholder">("placeholder")
+  const [hasPaid, setHasPaid] = useState(false)
 
   // Check if we're on the client side
   useEffect(() => {
@@ -150,6 +151,7 @@ export default function ResumeBuilder() {
         content: { html, data },
         template_id: selectedTemplateId,
         is_public: false,
+        is_paid: hasPaid,
       })
 
       if (error) {
@@ -178,6 +180,15 @@ export default function ResumeBuilder() {
   const handleSelectTemplate = (templateId: string) => {
     setSelectedTemplateId(templateId)
     setStep("edit")
+  }
+
+  const exportToPdf = () => {
+    // Implement your PDF export logic here
+    // This is a placeholder function
+    toast({
+      title: "Download PDF",
+      description: "Downloading PDF functionality is not yet implemented.",
+    })
   }
 
   const renderStepContent = () => {
@@ -305,18 +316,35 @@ export default function ResumeBuilder() {
                 </div>
               </CardContent>
             </Card>
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => setStep("edit")}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Editor
-              </Button>
-              <div className="flex gap-2">
-                <Button onClick={() => setStep("checkout")} disabled={!hasSaved}>
-                  Proceed to Checkout
-                  <ArrowRight className="ml-2 h-4 w-4" />
+
+            {!hasPaid ? (
+              <Card className="p-6">
+                <CardHeader>
+                  <CardTitle>Download Your Resume</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="mb-4">
+                    To download your resume as a PDF, please pay the one-time fee of KES 500 (approx. $4).
+                  </p>
+                  <Button onClick={() => setStep("checkout")} className="w-full">
+                    Pay KES 500 to Download
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setStep("edit")}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to Editor
                 </Button>
+                <div className="flex gap-2">
+                  <Button onClick={() => exportToPdf()}>
+                    <FileIcon className="mr-2 h-4 w-4" />
+                    Download PDF
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )
 
@@ -333,7 +361,7 @@ export default function ResumeBuilder() {
                     <h3 className="font-medium">Resume Download</h3>
                     <p className="text-sm text-muted-foreground">{resumeTitle}</p>
                   </div>
-                  <div className="font-bold">KSh 300</div>
+                  <div className="font-bold">KES 500</div>
                 </div>
 
                 <div className="space-y-4 pt-4">
@@ -355,7 +383,19 @@ export default function ResumeBuilder() {
                       <Input id="cvc" placeholder="123" />
                     </div>
                   </div>
-                  <Button className="w-full">Pay KSh 300 & Download</Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      setHasPaid(true)
+                      toast({
+                        title: "Payment Successful",
+                        description: "Your payment was successful. You can now download your resume.",
+                      })
+                      setStep("preview")
+                    }}
+                  >
+                    Pay KES 500 & Download
+                  </Button>
                 </div>
               </CardContent>
             </Card>
