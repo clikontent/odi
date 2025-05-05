@@ -1,126 +1,440 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { useRouter } from "next/navigation"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ResumeEditor } from "@/components/resume/resume-editor"
-import { ResumePreview } from "@/components/resume/resume-preview"
-import { TemplateSelector } from "@/components/resume/template-selector"
-import { ContentGenerator } from "@/components/ai/content-generator"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import dynamic from "next/dynamic"
+import { DashboardLayout } from "@/components/dashboard-layout"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Download, Eye, Save, Sparkles } from "lucide-react"
+import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { getResumeTemplates, getResumeTemplateById } from "@/lib/templates"
+import type { ResumeTemplate } from "@/lib/supabase"
+import ErrorBoundary from "@/components/error-boundary"
+import { toast } from "@/components/ui/use-toast"
 
-export default function ResumeBuilderPage() {
+// Dynamically import the resume builders with no SSR
+const PlaceholderResumeBuilder = dynamic(() => import("@/components/placeholder-resume-builder"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-64">
+      <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+    </div>
+  ),
+})
+
+export default function ResumeBuilder() {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState("editor")
-  const [selectedTemplate, setSelectedTemplate] = useState("professional")
-  const contentRef = useRef<HTMLDivElement>(null)
+  const searchParams = useSearchParams()
+  const templateId = searchParams.get("template")
 
-  const handlePreview = () => {
-    router.push("/dashboard/resume-builder/preview")
+  const [step, setStep] = useState<"template" | "edit" | "preview" | "checkout">("template")
+  const [resumeTitle, setResumeTitle] = useState("My Resume")
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(templateId)
+  const [templates, setTemplates] = useState<ResumeTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedTemplate, setSelectedTemplate] = useState<ResumeTemplate | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [resumeHtml, setResumeHtml] = useState<string | null>(null)
+  const [resumeData, setResumeData] = useState<any | null>(null)
+  const [isClient, setIsClient] = useState(false)
+  const [hasSaved, setHasSaved] = useState(false)
+  const [builderType, setBuilderType] = useState<"html" | "placeholder">("placeholder")
+
+  // Check if we're on the client side
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  // If template ID is provided in URL, go directly to edit step
+  useEffect(() => {
+    if (templateId) {
+      setSelectedTemplateId(templateId)
+      setStep("edit")
+    }
+  }, [templateId])
+
+  useEffect(() => {
+    async function fetchTemplates() {
+      try {
+        const { data } = await supabase.auth.getUser()
+
+        if (data?.user) {
+          setUserId(data.user.id)
+        }
+
+        const templates = await getResumeTemplates()
+
+        if (templates && templates.length > 0) {
+          setTemplates(templates)
+
+          // If no template is selected yet, use the first one
+          if (!selectedTemplateId) {
+            setSelectedTemplateId(templates[0].id)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching templates:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load resume templates. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchTemplates()
+  }, [selectedTemplateId])
+
+  useEffect(() => {
+    async function fetchSelectedTemplate() {
+      if (selectedTemplateId) {
+        try {
+          setLoading(true)
+          const template = await getResumeTemplateById(selectedTemplateId)
+          if (template) {
+            setSelectedTemplate(template)
+
+            // If we're in the edit step, make sure we have the template before proceeding
+            if (step === "edit" && !template.html_content) {
+              console.error("Template has no HTML content")
+              toast({
+                title: "Error",
+                description: "The selected template is missing content. Please choose another template.",
+                variant: "destructive",
+              })
+              // Fallback to template selection if the template has no content
+              setStep("template")
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching template:", error)
+          toast({
+            title: "Error",
+            description: "Failed to load the selected template. Please try again.",
+            variant: "destructive",
+          })
+          // Fallback to template selection if there's an error
+          setStep("template")
+        } finally {
+          setLoading(false)
+        }
+      }
+    }
+
+    fetchSelectedTemplate()
+  }, [selectedTemplateId, step])
+
+  const saveResume = async (html: string, data?: any) => {
+    if (!userId) {
+      toast({
+        title: "Authentication Required",
+        description: "You must be logged in to save a resume",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setResumeHtml(html)
+      setResumeData(data || null)
+
+      // Save to resumes table
+      const { data: savedData, error } = await supabase.from("resumes").insert({
+        user_id: userId,
+        title: resumeTitle,
+        content: { html, data },
+        template_id: selectedTemplateId,
+        is_public: false,
+      })
+
+      if (error) {
+        console.error("Error details:", error)
+        throw error
+      }
+
+      setHasSaved(true)
+      toast({
+        title: "Success",
+        description: "Your resume has been saved successfully!",
+      })
+
+      // Move to preview step
+      setStep("preview")
+    } catch (error) {
+      console.error("Error saving resume:", error)
+      toast({
+        title: "Save Failed",
+        description: "Failed to save resume. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const scrollToContent = () => {
-    if (contentRef.current) {
-      contentRef.current.scrollIntoView({ behavior: "smooth" })
+  const handleSelectTemplate = (templateId: string) => {
+    setSelectedTemplateId(templateId)
+    setStep("edit")
+  }
+
+  const renderStepContent = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      )
+    }
+
+    switch (step) {
+      case "template":
+        return (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {templates.map((template) => (
+                <Card key={template.id} className="overflow-hidden flex flex-col">
+                  <div className="relative aspect-[3/4] bg-muted">
+                    {template.thumbnail_url ? (
+                      <img
+                        src={template.thumbnail_url || "/placeholder.svg"}
+                        alt={template.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-center p-4">
+                          <h3 className="font-medium">{template.name}</h3>
+                          <p className="text-sm text-muted-foreground mt-2">{template.description}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <CardContent className="p-3 flex flex-col justify-between flex-1">
+                    <div>
+                      <h3 className="font-bold">{template.name}</h3>
+                      <p className="text-sm text-muted-foreground capitalize">{template.category}</p>
+                    </div>
+                    <Button className="w-full mt-2" onClick={() => handleSelectTemplate(template.id)} size="sm">
+                      Use This Template
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <div className="flex justify-center">
+              <Button variant="outline" onClick={() => router.push("/dashboard/resume-templates")}>
+                View All Templates
+              </Button>
+            </div>
+          </div>
+        )
+
+      case "edit":
+        return selectedTemplate ? (
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2 mb-2">
+              <div className="flex-1">
+                <Label htmlFor="resumeTitle">Resume Title</Label>
+                <Input
+                  id="resumeTitle"
+                  value={resumeTitle}
+                  onChange={(e) => setResumeTitle(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="h-[calc(100vh-180px)]">
+              <ErrorBoundary>
+                {isClient && (
+                  <PlaceholderResumeBuilder
+                    templateHtml={selectedTemplate.html_content}
+                    templateCss={selectedTemplate.css_content || ""}
+                    onSave={saveResume}
+                  />
+                )}
+              </ErrorBoundary>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-64">
+            <p className="text-muted-foreground">Please select a template</p>
+          </div>
+        )
+
+      case "preview":
+        return (
+          <div className="space-y-4">
+            <Card className="overflow-hidden">
+              <CardHeader className="py-2">
+                <CardTitle className="text-lg">{resumeTitle}</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="bg-white p-6">
+                  {resumeHtml && selectedTemplate && (
+                    <div
+                      className="min-h-[800px]"
+                      dangerouslySetInnerHTML={{
+                        __html: `
+                          <style>
+                            ${selectedTemplate.css_content || ""}
+                            .page-break {
+                              height: 20px;
+                              background-color: #f5f5f5;
+                              margin: 20px 0;
+                              border-top: 1px dashed #ccc;
+                              border-bottom: 1px dashed #ccc;
+                            }
+                            @media print {
+                              .page-break {
+                                page-break-before: always;
+                                height: 0;
+                                margin: 0;
+                                border: none;
+                              }
+                            }
+                          </style>
+                          ${resumeHtml}
+                        `,
+                      }}
+                    />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep("edit")}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Editor
+              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => setStep("checkout")} disabled={!hasSaved}>
+                  Proceed to Checkout
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+
+      case "checkout":
+        return (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Complete Your Purchase</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between items-center border-b pb-4">
+                  <div>
+                    <h3 className="font-medium">Resume Download</h3>
+                    <p className="text-sm text-muted-foreground">{resumeTitle}</p>
+                  </div>
+                  <div className="font-bold">KSh 300</div>
+                </div>
+
+                <div className="space-y-4 pt-4">
+                  <div>
+                    <Label htmlFor="cardNumber">Card Number</Label>
+                    <Input id="cardNumber" placeholder="1234 5678 9012 3456" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label htmlFor="expMonth">Expiry Month</Label>
+                      <Input id="expMonth" placeholder="MM" />
+                    </div>
+                    <div>
+                      <Label htmlFor="expYear">Expiry Year</Label>
+                      <Input id="expYear" placeholder="YY" />
+                    </div>
+                    <div>
+                      <Label htmlFor="cvc">CVC</Label>
+                      <Input id="cvc" placeholder="123" />
+                    </div>
+                  </div>
+                  <Button className="w-full">Pay KSh 300 & Download</Button>
+                </div>
+              </CardContent>
+            </Card>
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep("preview")}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Preview
+              </Button>
+            </div>
+          </div>
+        )
     }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Resume Builder</h2>
-          <p className="text-muted-foreground">Create and customize your professional resume</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Save className="mr-2 h-4 w-4" />
-            Save
-          </Button>
-          <Button size="sm">
-            <Download className="mr-2 h-4 w-4" />
-            Download
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-2">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="templates">Templates</TabsTrigger>
-              <TabsTrigger value="editor">Editor</TabsTrigger>
-            </TabsList>
-            <TabsContent value="templates" className="mt-4">
-              <TemplateSelector selectedTemplate={selectedTemplate} onSelectTemplate={setSelectedTemplate} />
-            </TabsContent>
-            <TabsContent value="editor" className="mt-4">
-              <div className="space-y-4">
-                <ResumeEditor />
-                <div className="mt-8" ref={contentRef}>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center">
-                        <Sparkles className="mr-2 h-5 w-5 text-primary" />
-                        AI Content Assistant
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Tabs defaultValue="summary" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4">
-                          <TabsTrigger value="summary">Summary</TabsTrigger>
-                          <TabsTrigger value="experience">Experience</TabsTrigger>
-                          <TabsTrigger value="skills">Skills</TabsTrigger>
-                          <TabsTrigger value="education">Education</TabsTrigger>
-                        </TabsList>
-
-                        <TabsContent value="summary" className="pt-4">
-                          <ContentGenerator type="summary" />
-                        </TabsContent>
-
-                        <TabsContent value="experience" className="pt-4">
-                          <ContentGenerator type="experience" />
-                        </TabsContent>
-
-                        <TabsContent value="skills" className="pt-4">
-                          <ContentGenerator type="skills" />
-                        </TabsContent>
-
-                        <TabsContent value="education" className="pt-4">
-                          <ContentGenerator type="education" />
-                        </TabsContent>
-                      </Tabs>
-                    </CardContent>
-                  </Card>
-                </div>
-                <div className="flex justify-center mt-4">
-                  <Button variant="outline" onClick={scrollToContent}>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Get AI Suggestions
-                  </Button>
+    <DashboardLayout>
+      <div className="container py-4">
+        <div className="flex flex-col gap-4">
+          {step !== "edit" && (
+            <>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight">Resume Builder</h1>
+                  <p className="text-muted-foreground">Create and customize your professional resume</p>
                 </div>
               </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-        <div className="lg:col-span-3">
-          <div className="rounded-lg border bg-card shadow">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="font-medium">Preview</h3>
-              <Button onClick={handlePreview} size="sm" variant="ghost">
-                <Eye className="mr-2 h-4 w-4" />
-                Full Preview
-              </Button>
-            </div>
-            <div className="p-4 max-h-[800px] overflow-auto">
-              <ResumePreview template={selectedTemplate} />
-            </div>
-          </div>
+
+              <div className="relative">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-muted">
+                  <div
+                    className="h-1 bg-primary transition-all"
+                    style={{
+                      width:
+                        step === "template" ? "25%" : step === "edit" ? "50%" : step === "preview" ? "75%" : "100%",
+                    }}
+                  />
+                </div>
+
+                <div className="flex justify-between pt-6 pb-6">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center ${step === "template" ? "bg-primary text-white" : "bg-muted"}`}
+                    >
+                      {step === "template" ? "1" : <Check className="h-4 w-4" />}
+                    </div>
+                    <span className="text-xs mt-1">Choose Template</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center ${step === "edit" ? "bg-primary text-white" : step === "template" ? "bg-muted" : "bg-primary text-white"}`}
+                    >
+                      {step === "edit" ? "2" : step === "template" ? "2" : <Check className="h-4 w-4" />}
+                    </div>
+                    <span className="text-xs mt-1">Edit Content</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center ${step === "preview" ? "bg-primary text-white" : step === "checkout" ? "bg-primary text-white" : "bg-muted"}`}
+                    >
+                      {step === "preview" ? "3" : step === "checkout" ? <Check className="h-4 w-4" /> : "3"}
+                    </div>
+                    <span className="text-xs mt-1">Preview</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center ${step === "checkout" ? "bg-primary text-white" : "bg-muted"}`}
+                    >
+                      {step === "checkout" ? "4" : "4"}
+                    </div>
+                    <span className="text-xs mt-1">Checkout</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {renderStepContent()}
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }
-

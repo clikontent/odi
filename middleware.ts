@@ -1,38 +1,40 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 
-export async function middleware(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next()
+  const supabase = createMiddlewareClient({ req, res })
 
-  if (!supabaseUrl || !supabaseKey) {
-    console.error("Missing Supabase environment variables in middleware")
-    return NextResponse.next() // Allow access instead of redirecting
-  }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false },
-  })
+  // Check if the user is authenticated
+  const isAuthenticated = !!session
+  const isAuthPage = req.nextUrl.pathname.startsWith("/login") || req.nextUrl.pathname.startsWith("/signup")
+  const isPublicPage =
+    req.nextUrl.pathname === "/" ||
+    req.nextUrl.pathname.startsWith("/_next") ||
+    req.nextUrl.pathname.startsWith("/api") ||
+    req.nextUrl.pathname.startsWith("/pricing")
 
-  const { data: { session } } = await supabase.auth.getSession()
-  const { pathname } = request.nextUrl
-
-  // Redirect users without a session trying to access protected pages
-  if (!session && pathname.startsWith("/dashboard")) {
-    const redirectUrl = new URL("/login", request.url)
-    redirectUrl.searchParams.set("redirectedFrom", pathname)
+  // If user is not authenticated and trying to access a protected route
+  if (!isAuthenticated && !isAuthPage && !isPublicPage) {
+    const redirectUrl = new URL("/login", req.url)
+    redirectUrl.searchParams.set("redirect", req.nextUrl.pathname)
     return NextResponse.redirect(redirectUrl)
   }
 
-  // Prevent logged-in users from accessing auth pages
-  if (session && ["/", "/login", "/register"].includes(pathname)) {
-    return NextResponse.redirect(new URL("/dashboard", request.url))
+  // If user is authenticated and trying to access auth pages
+  if (isAuthenticated && isAuthPage) {
+    return NextResponse.redirect(new URL("/dashboard", req.url))
   }
 
-  return NextResponse.next()
+  return res
 }
 
+// Only run middleware on specific paths
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.svg$).*)"],
 }
