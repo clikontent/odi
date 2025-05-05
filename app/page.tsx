@@ -4,18 +4,17 @@ import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Check } from "lucide-react"
 
 export default function Home() {
   const [currency, setCurrency] = useState<"USD" | "KES">("KES")
 
   const exchangeRate = 130 // 1 USD = 130 KES (approximate)
 
-  const formatPrice = (kesPrice: number) => {
+  const formatPrice = (usdPrice: number) => {
     if (currency === "USD") {
-      return `$${Math.round(kesPrice / exchangeRate)}`
+      return `$${usdPrice}`
     } else {
-      return `KSh ${kesPrice.toLocaleString()}`
+      return `KSh ${Math.round(usdPrice * exchangeRate)}`
     }
   }
 
@@ -213,35 +212,82 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 py-12 md:grid-cols-3">
-              {/* Free Plan */}
+            <div className="mx-auto grid max-w-5xl grid-cols-1 gap-6 py-12 md:grid-cols-2">
               <div className="flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm">
                 <div className="p-6 pt-8">
-                  <h3 className="text-2xl font-bold">Free Plan</h3>
-                  <p className="mt-2 text-muted-foreground">Pay-per-use, try before you buy</p>
+                  <h3 className="text-2xl font-bold">Individual</h3>
+                  <p className="mt-2 text-muted-foreground">For job seekers and professionals</p>
                   <div className="mt-4 flex items-baseline">
                     <span className="text-3xl font-bold">Free Registration</span>
                   </div>
                   <ul className="mt-6 space-y-3">
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>5 Free AI-Generated Cover Letters (One-Time)</span>
+                    <li className="flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2 h-4 w-4 text-primary"
+                      >
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Access all templates at {formatPrice(4)} per resume/CV
                     </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>One-Time Resume/CV Download ({formatPrice(500)})</span>
+                    <li className="flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2 h-4 w-4 text-primary"
+                      >
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Unlimited access to job board
                     </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Basic ATS Score (No Fixes)</span>
+                    <li className="flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2 h-4 w-4 text-primary"
+                      >
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Resume ATS analyzer
                     </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Job Board (Read-Only)</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Access to all templates</span>
+                    <li className="flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2 h-4 w-4 text-primary"
+                      >
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Export to PDF and Word
                     </li>
                   </ul>
                 </div>
@@ -251,86 +297,108 @@ export default function Home() {
                   </Link>
                 </div>
               </div>
-
-              {/* Premium Plan */}
               <div className="relative flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm">
                 <div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
-                  Most Popular
+                  Popular
                 </div>
                 <div className="p-6 pt-8">
-                  <h3 className="text-2xl font-bold">Premium Plan</h3>
-                  <p className="mt-2 text-muted-foreground">Maximum value for job seekers</p>
+                  <h3 className="text-2xl font-bold">Corporate</h3>
+                  <p className="mt-2 text-muted-foreground">For businesses and recruitment agencies</p>
                   <div className="mt-4 flex items-baseline">
-                    <span className="text-3xl font-bold">{formatPrice(1000)}</span>
+                    <span className="text-3xl font-bold">{formatPrice(19.99)}</span>
                     <span className="ml-1 text-sm text-muted-foreground">/month</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">or {formatPrice(8000)}/year (save 30%)</p>
                   <ul className="mt-6 space-y-3">
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Unlimited AI-Generated Cover Letters</span>
+                    <li className="flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2 h-4 w-4 text-primary"
+                      >
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Post unlimited job listings
                     </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Full ATS Optimization (Not Just Scores)</span>
+                    <li className="flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2 h-4 w-4 text-primary"
+                      >
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Access to candidate database
                     </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>10 Resume/CV Downloads (All Templates)</span>
+                    <li className="flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2 h-4 w-4 text-primary"
+                      >
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Staff onboarding tools
                     </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Priority Job Board Access</span>
+                    <li className="flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2 h-4 w-4 text-primary"
+                      >
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Advanced analytics and reporting
                     </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>AI Interview Prep Tool</span>
+                    <li className="flex items-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="mr-2 h-4 w-4 text-primary"
+                      >
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                      Priority customer support
                     </li>
                   </ul>
                 </div>
                 <div className="flex flex-1 flex-col justify-end p-6 pt-0">
                   <Link href="/signup">
                     <Button className="w-full">Sign Up</Button>
-                  </Link>
-                </div>
-              </div>
-
-              {/* Corporate Plan */}
-              <div className="flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm">
-                <div className="p-6 pt-8">
-                  <h3 className="text-2xl font-bold">Corporate Plan</h3>
-                  <p className="mt-2 text-muted-foreground">For employers & recruiters</p>
-                  <div className="mt-4 flex items-baseline">
-                    <span className="text-3xl font-bold">{formatPrice(15000)}</span>
-                    <span className="ml-1 text-sm text-muted-foreground">/month</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">or {formatPrice(120000)}/year (save 30%)</p>
-                  <ul className="mt-6 space-y-3">
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Bulk Hiring Tools (100+ resumes/month)</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>AI-powered candidate matching</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Featured job posts</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Dashboard analytics & reporting</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Dedicated account manager</span>
-                    </li>
-                  </ul>
-                </div>
-                <div className="flex flex-1 flex-col justify-end p-6 pt-0">
-                  <Link href="/signup">
-                    <Button className="w-full">Contact Sales</Button>
                   </Link>
                 </div>
               </div>
@@ -432,8 +500,8 @@ export default function Home() {
               <div className="rounded-lg border bg-card p-6">
                 <h3 className="text-lg font-bold">Is CV Chap Chap really free to register?</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Yes, individual job seekers can register for free. You get 5 free AI-generated cover letters and pay
-                  only {formatPrice(500)} per resume download.
+                  Yes, individual job seekers can register for free. You only pay{" "}
+                  {currency === "USD" ? "$4" : "KSh 500"} per resume/CV when you need one.
                 </p>
               </div>
               <div className="rounded-lg border bg-card p-6">
@@ -444,7 +512,7 @@ export default function Home() {
                 </p>
               </div>
               <div className="rounded-lg border bg-card p-6">
-                <h3 className="text-lg font-bold">Can I cancel my subscription?</h3>
+                <h3 className="text-lg font-bold">Can I cancel my corporate subscription?</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Yes, you can cancel your subscription at any time. Your benefits will continue until the end of your
                   billing period.

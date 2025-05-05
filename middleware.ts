@@ -1,40 +1,62 @@
+import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 
 export async function middleware(req: NextRequest) {
+  // Create a Supabase client configured to use cookies
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
+  // Refresh session if expired - required for Server Components
   const {
     data: { session },
   } = await supabase.auth.getSession()
 
-  // Check if the user is authenticated
-  const isAuthenticated = !!session
-  const isAuthPage = req.nextUrl.pathname.startsWith("/login") || req.nextUrl.pathname.startsWith("/signup")
-  const isPublicPage =
-    req.nextUrl.pathname === "/" ||
-    req.nextUrl.pathname.startsWith("/_next") ||
-    req.nextUrl.pathname.startsWith("/api") ||
-    req.nextUrl.pathname.startsWith("/pricing")
+  // Check auth condition based on route
+  const url = req.nextUrl.pathname
 
-  // If user is not authenticated and trying to access a protected route
-  if (!isAuthenticated && !isAuthPage && !isPublicPage) {
-    const redirectUrl = new URL("/login", req.url)
-    redirectUrl.searchParams.set("redirect", req.nextUrl.pathname)
-    return NextResponse.redirect(redirectUrl)
+  // Protected routes that require authentication
+  const protectedRoutes = [
+    "/dashboard",
+    "/settings",
+    "/files",
+    "/activity",
+    "/analytics",
+    "/notifications",
+    "/corporate",
+  ]
+
+  // Check if the current route is protected
+  const isProtectedRoute = protectedRoutes.some((route) => url.startsWith(route))
+
+  // Auth routes that should redirect to dashboard if already logged in
+  const authRoutes = ["/login", "/signup"]
+  const isAuthRoute = authRoutes.some((route) => url === route)
+
+  // If accessing a protected route without a session, redirect to login
+  if (isProtectedRoute && !session) {
+    return NextResponse.redirect(new URL("/login", req.url))
   }
 
-  // If user is authenticated and trying to access auth pages
-  if (isAuthenticated && isAuthPage) {
+  // If accessing auth routes with a session, redirect to dashboard
+  if (isAuthRoute && session) {
     return NextResponse.redirect(new URL("/dashboard", req.url))
   }
 
   return res
 }
 
-// Only run middleware on specific paths
+// Specify which routes this middleware should run on
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.svg$).*)"],
+  matcher: [
+    "/dashboard/:path*",
+    "/settings/:path*",
+    "/files/:path*",
+    "/activity/:path*",
+    "/analytics/:path*",
+    "/notifications/:path*",
+    "/corporate/:path*",
+    "/login",
+    "/signup",
+  ],
 }
