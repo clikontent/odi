@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@ai-sdk/google':
         specifier: latest
-        version: 1.2.14(zod@3.24.1)
+        version: 1.2.15(zod@3.24.1)
       '@hookform/resolvers':
         specifier: ^3.9.1
         version: 3.9.1(react-hook-form@7.54.1(react@19.0.0))
@@ -234,8 +234,8 @@ importers:
 
 packages:
 
-  '@ai-sdk/google@1.2.14':
-    resolution: {integrity: sha512-r3FSyyWl0KVjUlKn5o+vMl+Nk8Z/mV6xrqW+49g7fMoRVr/wkRxJZtHorrdDGRreCJubZyAk8ziSQSLpgv2H6w==}
+  '@ai-sdk/google@1.2.15':
+    resolution: {integrity: sha512-NYHzLz+HBnf7onEJIZkFFGKLnD3LTIw7REULDjVAUe1z5cXRu2igGV4xv4kb/lSEKLxef+urxhKpDAOfbIASCQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.0.0
@@ -2597,7 +2597,7 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/google@1.2.14(zod@3.24.1)':
+  '@ai-sdk/google@1.2.15(zod@3.24.1)':
     dependencies:
       '@ai-sdk/provider': 1.1.3
       '@ai-sdk/provider-utils': 2.2.7(zod@3.24.1)
