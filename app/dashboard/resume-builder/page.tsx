@@ -15,16 +15,6 @@ import type { ResumeTemplate } from "@/lib/supabase"
 import ErrorBoundary from "@/components/error-boundary"
 import { toast } from "@/components/ui/use-toast"
 
-// Dynamically import the heavy canvas resume builder component
-const CanvasResumeBuilder = dynamic(() => import("@/components/canvas-resume-builder"), {
-  ssr: false, // Disable server-side rendering for this component
-  loading: () => (
-    <div className="flex items-center justify-center h-[600px]">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-    </div>
-  ),
-})
-
 // Dynamically import the resume builders with no SSR
 const PlaceholderResumeBuilder = dynamic(() => import("@/components/placeholder-resume-builder"), {
   ssr: false,
@@ -271,7 +261,7 @@ export default function ResumeBuilder() {
             <div className="h-[calc(100vh-180px)]">
               <ErrorBoundary>
                 {isClient && (
-                  <CanvasResumeBuilder
+                  <PlaceholderResumeBuilder
                     templateHtml={selectedTemplate.html_content}
                     templateCss={selectedTemplate.css_content || ""}
                     onSave={saveResume}

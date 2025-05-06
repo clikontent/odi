@@ -60,9 +60,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function fetchData() {
-      // Add this at the top of your useEffect
-      const controller = new AbortController()
-      const { signal } = controller
       try {
         const {
           data: { user },
@@ -76,7 +73,6 @@ export default function Dashboard() {
             .eq("user_id", user.id)
             .order("updated_at", { ascending: false })
             .limit(3)
-            .abortSignal(signal) // Add abort signal for cleanup
 
           if (resumeError) throw resumeError
           setRecentResumes(resumeData || [])
@@ -116,11 +112,6 @@ export default function Dashboard() {
     }
 
     fetchData()
-
-    // Add this to your useEffect cleanup
-    return () => {
-      controller.abort()
-    }
   }, [])
 
   const features = [

@@ -33,7 +33,7 @@ export function Tiptap({ content, onChange, onBlur }: TiptapProps) {
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML())
     },
-    onBlur: ({ editor }) => {
+    onBlur: () => {
       if (onBlur) onBlur()
     },
     editorProps: {
