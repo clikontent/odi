@@ -76,7 +76,8 @@
     "file-saver": "latest",
     "ai": "latest",
     "@ai-sdk/google": "latest",
-    "@supabase/auth-helpers-nextjs": "latest"
+    "@supabase/auth-helpers-nextjs": "latest",
+    "@google/generative-ai": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

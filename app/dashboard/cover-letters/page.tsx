@@ -378,7 +378,7 @@ await trackAIUsage("generate_cover_letter", 500, userId)
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div>
-                          <Label htmlFor="fullName">Full Name</Label>
+                          <Label htmlFor="fullName">Name</Label>
                           <Input
                             id="fullName"
                             name="fullName"
@@ -387,37 +387,7 @@ await trackAIUsage("generate_cover_letter", 500, userId)
                             className="mt-1"
                           />
                         </div>
-                        <div>
-                          <Label htmlFor="email">Email</Label>
-                          <Input
-                            id="email"
-                            name="email"
-                            type="email"
-                            value={personalInfo.email}
-                            onChange={handlePersonalInfoChange}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="phone">Phone</Label>
-                          <Input
-                            id="phone"
-                            name="phone"
-                            value={personalInfo.phone}
-                            onChange={handlePersonalInfoChange}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="address">Address</Label>
-                          <Input
-                            id="address"
-                            name="address"
-                            value={personalInfo.address}
-                            onChange={handlePersonalInfoChange}
-                            className="mt-1"
-                          />
-                        </div>
+                                             
                         <div>
                           <Label htmlFor="relevantExperience">Relevant Experience</Label>
                           <Textarea
