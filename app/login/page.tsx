@@ -5,7 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -31,6 +31,9 @@ export default function LoginPage() {
     setLoginStatus(null)
 
     try {
+      // Create a new Supabase client for the component
+      const supabase = createClientComponentClient()
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -62,7 +65,7 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Login failed",
-        description: error.message,
+        description: error.message || "Failed to connect to authentication service",
       })
     } finally {
       setLoading(false)
@@ -72,6 +75,9 @@ export default function LoginPage() {
   const handleSocialLogin = async (provider: "google" | "facebook") => {
     try {
       setLoginStatus(null)
+      // Create a new Supabase client for the component
+      const supabase = createClientComponentClient()
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -92,7 +98,7 @@ export default function LoginPage() {
       toast({
         variant: "destructive",
         title: "Login failed",
-        description: error.message,
+        description: error.message || "Failed to connect to authentication service",
       })
     }
   }

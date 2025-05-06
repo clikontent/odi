@@ -1,17 +1,23 @@
 import { createClient } from "@supabase/supabase-js"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import type { Database } from "./database.types"
 
-// Create a singleton instance
+// Create a singleton instance for server-side
 let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
 
 export const supabase = (() => {
-  if (supabaseInstance) return supabaseInstance
-
-  supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey)
-  return supabaseInstance
+  if (typeof window === "undefined") {
+    // Server-side: Use createClient
+    if (supabaseInstance) return supabaseInstance
+    supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey)
+    return supabaseInstance
+  } else {
+    // Client-side: Use createClientComponentClient
+    return createClientComponentClient<Database>()
+  }
 })()
 
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"]
