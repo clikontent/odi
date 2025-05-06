@@ -138,8 +138,9 @@ export default function CoverLetterGenerator() {
         }
       }
 
-      // Track AI usage
-      await trackAIUsage(userId, "generate_cover_letter", 500)
+  
+    // Track AI usage
+await trackAIUsage("generate_cover_letter", 500, userId)
     } catch (error) {
       console.error("Error generating cover letter:", error)
       alert("Failed to generate cover letter. Please try again.")
@@ -147,6 +148,8 @@ export default function CoverLetterGenerator() {
       setIsGenerating(false)
     }
   }
+
+
 
   const saveCoverLetter = async () => {
     if (!userId) {

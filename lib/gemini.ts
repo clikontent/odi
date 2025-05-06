@@ -9,6 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 const model = google("gemini-1.5-pro-latest", {
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 })
+
 export async function generateSummary(experience: string, skills: string[]): Promise<string> {
   try {
     const prompt = `
@@ -22,10 +23,9 @@ export async function generateSummary(experience: string, skills: string[]): Pro
 
     The summary should highlight strengths, expertise, and career goals in a professional tone.
     `
-
     const { text } = await generateText({ model, prompt, maxTokens: 200 })
 
-    await trackAIUsage("generate_summary", 200) // Passing 200 as tokens used
+    await trackAIUsage({ feature: "generate_summary", tokensUsed: 200 })
     return text
   } catch (error) {
     console.error("Error generating summary:", error)
@@ -46,10 +46,9 @@ export async function suggestSkills(jobDescription: string, currentSkills: strin
 
     Return only a comma-separated list of skills, no explanations or numbering.
     `
-
     const { text } = await generateText({ model, prompt, maxTokens: 100 })
 
-    await trackAIUsage("suggest_skills", 100) // Passing 100 as tokens used
+    await trackAIUsage({ feature: "suggest_skills", tokensUsed: 100 })
     return text.split(",").map((skill) => skill.trim())
   } catch (error) {
     console.error("Error suggesting skills:", error)
@@ -63,6 +62,7 @@ export async function generateCoverLetter(
   jobDescription: string,
   experience: string,
   skills: string[],
+  userId?: string,
 ): Promise<string> {
   try {
     const prompt = `
@@ -80,10 +80,9 @@ export async function generateCoverLetter(
     The cover letter should be formal, professional, and highlight how the candidate's experience and skills match the job requirements.
     It should be 3-4 paragraphs long and include a strong opening, relevant experience highlights, and a call to action.
     `
-
     const { text } = await generateText({ model, prompt, maxTokens: 500 })
 
-    await trackAIUsage("generate_cover_letter", 500) // Passing 500 as tokens used
+    await trackAIUsage({ feature: "generate_cover_letter", tokensUsed: 500, userId })
     return text
   } catch (error) {
     console.error("Error generating cover letter:", error)
@@ -101,10 +100,9 @@ export async function suggestAchievements(experience: string): Promise<string[]>
 
     Return only a list of achievements, each starting with a strong action verb and including metrics where possible.
     `
-
     const { text } = await generateText({ model, prompt, maxTokens: 200 })
 
-    await trackAIUsage("suggest_achievements", 200) // Passing 200 as tokens used
+    await trackAIUsage({ feature: "suggest_achievements", tokensUsed: 200 })
     return text.split("\n").filter((line) => line.trim().length > 0)
   } catch (error) {
     console.error("Error suggesting achievements:", error)
@@ -115,6 +113,7 @@ export async function suggestAchievements(experience: string): Promise<string[]>
 export async function analyzeResumeForJobMatch(
   resumeText: string,
   jobDescription: string,
+  userId?: string,
 ): Promise<{
   score: number
   missingKeywords: string[]
@@ -137,10 +136,9 @@ export async function analyzeResumeForJobMatch(
 
     Format your response as valid JSON with the keys: "score", "missingKeywords", and "suggestions".
     `
-
     const { text } = await generateText({ model, prompt, maxTokens: 500 })
 
-    await trackAIUsage("analyze_resume", 500) // Passing 500 as tokens used
+    await trackAIUsage({ feature: "analyze_resume", tokensUsed: 500, userId })
 
     try {
       return JSON.parse(text)
@@ -162,7 +160,7 @@ export async function analyzeResumeForJobMatch(
   }
 }
 
-export async function generateInterviewQuestions(jobTitle: string, jobDescription: string): Promise<string[]> {
+export async function generateInterviewQuestions(jobTitle: string, jobDescription: string, userId?: string): Promise<string[]> {
   try {
     const prompt = `
     Generate 5 likely interview questions and answers for a ${jobTitle} position based on this job description:
@@ -171,10 +169,9 @@ export async function generateInterviewQuestions(jobTitle: string, jobDescriptio
 
     Return only the questions as a numbered list, no explanations or additional text.
     `
-
     const { text } = await generateText({ model, prompt, maxTokens: 300 })
 
-    await trackAIUsage("generate_interview_questions", 300) // Passing 300 as tokens used
+    await trackAIUsage({ feature: "generate_interview_questions", tokensUsed: 300, userId })
 
     const questions = text
       .split("\n")
@@ -188,7 +185,16 @@ export async function generateInterviewQuestions(jobTitle: string, jobDescriptio
   }
 }
 
-export async function trackAIUsage(feature: string, tokensUsed: number, userId?: string) {
+// ✅ Updated: trackAIUsage uses named parameters
+export async function trackAIUsage({
+  feature,
+  tokensUsed,
+  userId,
+}: {
+  feature: string
+  tokensUsed: number
+  userId?: string
+}) {
   try {
     if (!userId) {
       const { data } = await supabase.auth.getUser()
@@ -198,9 +204,9 @@ export async function trackAIUsage(feature: string, tokensUsed: number, userId?:
     if (!userId) return
 
     const { error } = await supabase.from("ai_usage").insert({
-      user_id: userId,
-      feature_name: feature, // Feature name correctly inserted as a string
-      tokens_used: tokensUsed, // Tokens used passed as an integer
+      user_id: String(userId),
+      feature_name: String(feature),
+      tokens_used: Number(tokensUsed),
     })
 
     if (error) throw error
