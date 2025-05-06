@@ -5,7 +5,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
@@ -17,7 +16,6 @@ import {
   Eye,
   Maximize,
   Minimize,
-  FileIcon,
   Copy,
   Trash,
   Plus,
@@ -33,11 +31,23 @@ import {
   ChevronDown,
   Minus,
   Layers,
+  GripVertical,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Tiptap } from "./tiptap-editor"
 
 // Define element types
-type ElementType = "text" | "heading" | "image" | "shape" | "divider" | "container"
+type ElementType =
+  | "text"
+  | "heading"
+  | "image"
+  | "shape"
+  | "divider"
+  | "container"
+  | "experience"
+  | "education"
+  | "skills"
+  | "header"
 
 // Define element interface
 interface ResumeElement {
@@ -69,6 +79,7 @@ interface ResumeElement {
   locked: boolean
   children?: ResumeElement[] // For container elements
   originalHtml?: string // Store original HTML for better preservation
+  gridArea?: string // For grid layout
 }
 
 // Define page interface
@@ -76,6 +87,7 @@ interface ResumePage {
   id: string
   elements: ResumeElement[]
   background: string
+  gridTemplate?: string // For grid layout
 }
 
 interface CanvasResumeBuilderProps {
@@ -92,6 +104,7 @@ const ToolbarItem = ({ type, label, icon: Icon, onDragStart }) => {
       draggable="true"
       onDragStart={(e) => onDragStart(e, type)}
     >
+      <GripVertical className="h-4 w-4 text-muted-foreground" />
       <Icon className="h-4 w-4" />
       <span>{label}</span>
     </div>
@@ -123,13 +136,9 @@ const Element = ({
   const [initialPosition, setInitialPosition] = useState({ x: 0, y: 0 })
   const [initialMousePosition, setInitialMousePosition] = useState({ x: 0, y: 0 })
 
-  const handleContentChange = (e) => {
-    setContent(e.target.value)
-  }
-
-  const saveContent = () => {
-    onUpdate({ ...element, content })
-    setEditing(false)
+  const handleContentChange = (newContent) => {
+    setContent(newContent)
+    onUpdate({ ...element, content: newContent })
   }
 
   // Handle mouse down for dragging
@@ -181,8 +190,19 @@ const Element = ({
         const canvasRect = canvasRef.current.getBoundingClientRect()
 
         // Calculate new position
-        const newX = Math.max(0, e.clientX - dragOffset.x + canvasRect.left)
-        const newY = Math.max(0, e.clientY - dragOffset.y + canvasRect.top)
+        let newX = Math.max(0, e.clientX - dragOffset.x + canvasRect.left)
+        let newY = Math.max(0, e.clientY - dragOffset.y + canvasRect.top)
+
+        // Grid snapping (snap to 10px grid)
+        newX = Math.round(newX / 10) * 10
+        newY = Math.round(newY / 10) * 10
+
+        // Ensure element stays within canvas bounds
+        const canvasWidth = canvasRef.current.offsetWidth
+        const canvasHeight = canvasRef.current.offsetHeight
+
+        newX = Math.min(newX, canvasWidth - element.width)
+        newY = Math.min(newY, canvasHeight - element.height)
 
         // Create a temporary element with the new position
         const tempElement = {
@@ -192,7 +212,7 @@ const Element = ({
         }
 
         // Check for collisions with other elements
-        const hasCollision = checkForCollision(tempElement, page.elements)
+        const hasCollision = checkForCollision(tempElement, page.elements, element.id)
 
         // Only update if there's no collision
         if (!hasCollision) {
@@ -207,42 +227,67 @@ const Element = ({
         let newX = initialPosition.x
         let newY = initialPosition.y
 
+        // Grid snapping for resizing
+        const snapSize = (size) => Math.round(size / 10) * 10
+
         // Handle different resize directions
         switch (resizeDirection) {
           case "e": // Right
-            newWidth = Math.max(50, initialSize.width + dx)
+            newWidth = snapSize(Math.max(50, initialSize.width + dx))
             break
           case "s": // Bottom
-            newHeight = Math.max(50, initialSize.height + dy)
+            newHeight = snapSize(Math.max(50, initialSize.height + dy))
             break
           case "se": // Bottom-right
-            newWidth = Math.max(50, initialSize.width + dx)
-            newHeight = Math.max(50, initialSize.height + dy)
+            newWidth = snapSize(Math.max(50, initialSize.width + dx))
+            newHeight = snapSize(Math.max(50, initialSize.height + dy))
             break
           case "w": // Left
-            newWidth = Math.max(50, initialSize.width - dx)
+            newWidth = snapSize(Math.max(50, initialSize.width - dx))
             newX = initialPosition.x + dx
             break
           case "n": // Top
-            newHeight = Math.max(50, initialSize.height - dy)
+            newHeight = snapSize(Math.max(50, initialSize.height - dy))
             newY = initialPosition.y + dy
             break
           case "ne": // Top-right
-            newWidth = Math.max(50, initialSize.width + dx)
-            newHeight = Math.max(50, initialSize.height - dy)
+            newWidth = snapSize(Math.max(50, initialSize.width + dx))
+            newHeight = snapSize(Math.max(50, initialSize.height - dy))
             newY = initialPosition.y + dy
             break
           case "nw": // Top-left
-            newWidth = Math.max(50, initialSize.width - dx)
-            newHeight = Math.max(50, initialSize.height - dy)
+            newWidth = snapSize(Math.max(50, initialSize.width - dx))
+            newHeight = snapSize(Math.max(50, initialSize.height - dy))
             newX = initialPosition.x + dx
             newY = initialPosition.y + dy
             break
           case "sw": // Bottom-left
-            newWidth = Math.max(50, initialSize.width - dx)
-            newHeight = Math.max(50, initialSize.height + dy)
+            newWidth = snapSize(Math.max(50, initialSize.width - dx))
+            newHeight = snapSize(Math.max(50, initialSize.height + dy))
             newX = initialPosition.x + dx
             break
+        }
+
+        // Ensure element stays within canvas bounds
+        const canvasWidth = canvasRef.current.offsetWidth
+        const canvasHeight = canvasRef.current.offsetHeight
+
+        if (newX < 0) {
+          newWidth += newX
+          newX = 0
+        }
+
+        if (newY < 0) {
+          newHeight += newY
+          newY = 0
+        }
+
+        if (newX + newWidth > canvasWidth) {
+          newWidth = canvasWidth - newX
+        }
+
+        if (newY + newHeight > canvasHeight) {
+          newHeight = canvasHeight - newY
         }
 
         // Update element size and position
@@ -287,44 +332,17 @@ const Element = ({
 
   const renderContent = () => {
     if (editing) {
-      switch (element.type) {
-        case "text":
-        case "heading":
-        case "container":
-          return (
-            <Textarea
-              value={content}
-              onChange={handleContentChange}
-              className="w-full h-full min-h-[50px] resize-none"
-              autoFocus
-              onBlur={saveContent}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && e.ctrlKey) {
-                  saveContent()
-                }
-              }}
-            />
-          )
-        case "image":
-          return (
-            <Input
-              type="text"
-              value={content}
-              onChange={handleContentChange}
-              placeholder="Image URL"
-              className="w-full"
-              onBlur={saveContent}
-            />
-          )
-        default:
-          return null
-      }
+      return <Tiptap content={content} onChange={handleContentChange} onBlur={() => setEditing(false)} />
     }
 
     switch (element.type) {
       case "text":
       case "heading":
       case "container":
+      case "experience":
+      case "education":
+      case "skills":
+      case "header":
         return <div dangerouslySetInnerHTML={{ __html: content }} />
       case "image":
         return content ? (
@@ -343,6 +361,22 @@ const Element = ({
     }
   }
 
+  // Get section title based on element type
+  const getSectionTitle = () => {
+    switch (element.type) {
+      case "header":
+        return "Header"
+      case "experience":
+        return "Work Experience"
+      case "education":
+        return "Education"
+      case "skills":
+        return "Skills"
+      default:
+        return element.type.charAt(0).toUpperCase() + element.type.slice(1)
+    }
+  }
+
   return (
     <div
       ref={elementRef}
@@ -351,6 +385,10 @@ const Element = ({
         isDragging && "opacity-50",
         isSelected && "ring-2 ring-primary ring-offset-2",
         element.locked ? "cursor-not-allowed" : "cursor-move",
+        element.type === "header" && "bg-gray-50",
+        element.type === "experience" && "bg-gray-50",
+        element.type === "education" && "bg-gray-50",
+        element.type === "skills" && "bg-gray-50",
       )}
       style={{
         left: `${element.x}px`,
@@ -367,7 +405,17 @@ const Element = ({
       onMouseDown={handleMouseDown}
       onDoubleClick={() => !element.locked && setEditing(true)}
     >
-      <div className="w-full h-full overflow-hidden">{renderContent()}</div>
+      {/* Section title for special sections */}
+      {(element.type === "header" ||
+        element.type === "experience" ||
+        element.type === "education" ||
+        element.type === "skills") && (
+        <div className="absolute -top-6 left-0 text-xs font-medium text-gray-500 bg-white px-2 py-1 rounded-t-md border border-gray-200">
+          {getSectionTitle()}
+        </div>
+      )}
+
+      <div className="w-full h-full overflow-hidden p-2">{renderContent()}</div>
 
       {isSelected && !editing && (
         <>
@@ -506,8 +554,8 @@ const Canvas = ({
     if (!type) return
 
     const canvasRect = canvasRef.current.getBoundingClientRect()
-    const x = e.clientX - canvasRect.left
-    const y = e.clientY - canvasRect.top
+    const x = Math.round((e.clientX - canvasRect.left) / 10) * 10 // Snap to grid
+    const y = Math.round((e.clientY - canvasRect.top) / 10) * 10 // Snap to grid
 
     // Create new element based on type
     let newElement = {
@@ -516,6 +564,46 @@ const Canvas = ({
       x,
       y,
       locked: false,
+    }
+
+    // Default content for each section type
+    const getDefaultContent = (type) => {
+      switch (type) {
+        case "header":
+          return `<div class="flex flex-col items-center">
+            <h1 class="text-2xl font-bold">Your Name</h1>
+            <p class="text-sm text-gray-600">email@example.com | (123) 456-7890 | City, Country</p>
+          </div>`
+        case "experience":
+          return `<div>
+            <h3 class="text-lg font-semibold">Job Title</h3>
+            <p class="text-sm font-medium">Company Name | Location | Date - Present</p>
+            <ul class="list-disc pl-5 mt-2 text-sm">
+              <li>Accomplishment 1</li>
+              <li>Accomplishment 2</li>
+              <li>Accomplishment 3</li>
+            </ul>
+          </div>`
+        case "education":
+          return `<div>
+            <h3 class="text-lg font-semibold">Degree Name</h3>
+            <p class="text-sm font-medium">University Name | Location | Graduation Date</p>
+            <p class="text-sm mt-1">GPA: 3.8/4.0</p>
+          </div>`
+        case "skills":
+          return `<div>
+            <ul class="grid grid-cols-2 gap-2 text-sm">
+              <li>Skill 1</li>
+              <li>Skill 2</li>
+              <li>Skill 3</li>
+              <li>Skill 4</li>
+              <li>Skill 5</li>
+              <li>Skill 6</li>
+            </ul>
+          </div>`
+        default:
+          return ""
+      }
     }
 
     switch (type) {
@@ -594,6 +682,54 @@ const Canvas = ({
           },
         }
         break
+      case "header":
+        newElement = {
+          ...newElement,
+          content: getDefaultContent("header"),
+          width: 500,
+          height: 100,
+          style: {
+            padding: "10px",
+            backgroundColor: "#f9fafb",
+          },
+        }
+        break
+      case "experience":
+        newElement = {
+          ...newElement,
+          content: getDefaultContent("experience"),
+          width: 500,
+          height: 150,
+          style: {
+            padding: "10px",
+            backgroundColor: "#f9fafb",
+          },
+        }
+        break
+      case "education":
+        newElement = {
+          ...newElement,
+          content: getDefaultContent("education"),
+          width: 500,
+          height: 120,
+          style: {
+            padding: "10px",
+            backgroundColor: "#f9fafb",
+          },
+        }
+        break
+      case "skills":
+        newElement = {
+          ...newElement,
+          content: getDefaultContent("skills"),
+          width: 400,
+          height: 150,
+          style: {
+            padding: "10px",
+            backgroundColor: "#f9fafb",
+          },
+        }
+        break
     }
 
     onAddElement(newElement)
@@ -603,10 +739,69 @@ const Canvas = ({
     e.preventDefault()
   }
 
+  // Draw grid lines
+  const drawGrid = () => {
+    const gridSize = 10
+    const gridColor = "#f0f0f0"
+    const width = 210 * 3.78 // A4 width in pixels (210mm at 96dpi)
+    const height = 297 * 3.78 // A4 height in pixels (297mm at 96dpi)
+
+    return (
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Horizontal lines */}
+        {Array.from({ length: Math.floor(height / gridSize) }).map((_, i) => (
+          <div
+            key={`h-${i}`}
+            className="absolute left-0 right-0 border-t border-dashed"
+            style={{
+              top: `${i * gridSize}px`,
+              borderColor: gridColor,
+              borderWidth: i % 5 === 0 ? "0.5px" : "0.25px",
+              opacity: i % 5 === 0 ? 0.5 : 0.25,
+            }}
+          />
+        ))}
+
+        {/* Vertical lines */}
+        {Array.from({ length: Math.floor(width / gridSize) }).map((_, i) => (
+          <div
+            key={`v-${i}`}
+            className="absolute top-0 bottom-0 border-l border-dashed"
+            style={{
+              left: `${i * gridSize}px`,
+              borderColor: gridColor,
+              borderWidth: i % 5 === 0 ? "0.5px" : "0.25px",
+              opacity: i % 5 === 0 ? 0.5 : 0.25,
+            }}
+          />
+        ))}
+      </div>
+    )
+  }
+
+  // Check for collision between elements
+  const checkForCollision = (newElement, currentElements, movingElementId) => {
+    // Skip collision check for the element being moved
+    const otherElements = currentElements.filter((el) => el.id !== movingElementId)
+
+    for (const element of otherElements) {
+      // Simple box collision detection
+      if (
+        newElement.x < element.x + element.width &&
+        newElement.x + newElement.width > element.x &&
+        newElement.y < element.y + element.height &&
+        newElement.y + newElement.height > element.y
+      ) {
+        return true // Collision detected
+      }
+    }
+    return false // No collision
+  }
+
   return (
     <div
       ref={canvasRef}
-      className="relative bg-white shadow-md"
+      className="relative bg-white shadow-md overflow-hidden"
       style={{
         width: "210mm",
         height: "297mm",
@@ -616,6 +811,8 @@ const Canvas = ({
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
+      {drawGrid()}
+
       {page.elements.map((element) => (
         <Element
           key={element.id}
@@ -654,7 +851,13 @@ const StyleEditor = ({ element, onUpdate }) => {
     <div className="p-4 space-y-4">
       <h3 className="font-medium">Element Style</h3>
 
-      {(element.type === "text" || element.type === "heading" || element.type === "container") && (
+      {(element.type === "text" ||
+        element.type === "heading" ||
+        element.type === "container" ||
+        element.type === "experience" ||
+        element.type === "education" ||
+        element.type === "skills" ||
+        element.type === "header") && (
         <>
           <div className="space-y-2">
             <label className="text-sm font-medium">Font Size</label>
@@ -878,7 +1081,7 @@ const PageManager = ({
             )}
           >
             <div className="flex items-center gap-2 cursor-pointer flex-1" onClick={() => onSelectPage(index)}>
-              <FileIcon className="h-4 w-4" />
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
               <span>Page {index + 1}</span>
             </div>
 
@@ -1042,123 +1245,89 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
     }
   }, [templateHtml, templateCss])
 
-  // Create a default page
+  // Create a default page with resume sections
   const createDefaultPage = () => {
     setPages([
       {
         id: "page-1",
         elements: [
           {
-            id: "heading-1",
-            type: "heading",
-            content: "<h1>Your Name</h1>",
+            id: "header-1",
+            type: "header",
+            content: `<div class="flex flex-col items-center">
+              <h1 class="text-2xl font-bold">Your Name</h1>
+              <p class="text-sm text-gray-600">email@example.com | (123) 456-7890 | City, Country</p>
+            </div>`,
             x: 50,
             y: 50,
-            width: 300,
-            height: 60,
-            style: {
-              fontSize: "28px",
-              fontWeight: "bold",
-              fontFamily: "Arial",
-              color: "#000000",
-              textAlign: "left",
-            },
-            locked: false,
-          },
-          {
-            id: "text-contact",
-            type: "text",
-            content: "<p>email@example.com | (123) 456-7890 | City, Country</p>",
-            x: 50,
-            y: 120,
             width: 500,
-            height: 30,
+            height: 100,
             style: {
-              fontSize: "14px",
-              fontFamily: "Arial",
-              color: "#666666",
-              textAlign: "left",
+              padding: "10px",
+              backgroundColor: "#f9fafb",
             },
             locked: false,
           },
           {
-            id: "divider-1",
-            type: "divider",
-            content: "",
+            id: "experience-1",
+            type: "experience",
+            content: `<div>
+              <h3 class="text-lg font-semibold">Job Title</h3>
+              <p class="text-sm font-medium">Company Name | Location | Date - Present</p>
+              <ul class="list-disc pl-5 mt-2 text-sm">
+                <li>Accomplishment 1</li>
+                <li>Accomplishment 2</li>
+                <li>Accomplishment 3</li>
+              </ul>
+            </div>`,
             x: 50,
             y: 170,
             width: 500,
-            height: 2,
+            height: 150,
             style: {
-              backgroundColor: "#000000",
+              padding: "10px",
+              backgroundColor: "#f9fafb",
             },
             locked: false,
           },
           {
-            id: "heading-summary",
-            type: "heading",
-            content: "<h2>Professional Summary</h2>",
-            x: 50,
-            y: 190,
-            width: 300,
-            height: 40,
-            style: {
-              fontSize: "20px",
-              fontWeight: "bold",
-              fontFamily: "Arial",
-              color: "#000000",
-              textAlign: "left",
-            },
-            locked: false,
-          },
-          {
-            id: "text-summary",
-            type: "text",
-            content:
-              "<p>Experienced professional with a track record of success. Double-click to edit this text and add your own professional summary.</p>",
-            x: 50,
-            y: 240,
-            width: 500,
-            height: 80,
-            style: {
-              fontSize: "16px",
-              fontFamily: "Arial",
-              color: "#000000",
-              textAlign: "left",
-            },
-            locked: false,
-          },
-          {
-            id: "heading-experience",
-            type: "heading",
-            content: "<h2>Work Experience</h2>",
+            id: "education-1",
+            type: "education",
+            content: `<div>
+              <h3 class="text-lg font-semibold">Degree Name</h3>
+              <p class="text-sm font-medium">University Name | Location | Graduation Date</p>
+              <p class="text-sm mt-1">GPA: 3.8/4.0</p>
+            </div>`,
             x: 50,
             y: 340,
-            width: 300,
-            height: 40,
-            style: {
-              fontSize: "20px",
-              fontWeight: "bold",
-              fontFamily: "Arial",
-              color: "#000000",
-              textAlign: "left",
-            },
-            locked: false,
-          },
-          {
-            id: "text-experience",
-            type: "text",
-            content:
-              "<p><strong>Job Title</strong> | Company Name | Date - Present<br>• Accomplishment 1<br>• Accomplishment 2<br>• Accomplishment 3</p>",
-            x: 50,
-            y: 390,
             width: 500,
             height: 120,
             style: {
-              fontSize: "16px",
-              fontFamily: "Arial",
-              color: "#000000",
-              textAlign: "left",
+              padding: "10px",
+              backgroundColor: "#f9fafb",
+            },
+            locked: false,
+          },
+          {
+            id: "skills-1",
+            type: "skills",
+            content: `<div>
+              <ul class="grid grid-cols-2 gap-2 text-sm">
+                <li>Skill 1</li>
+                <li>Skill 2</li>
+                <li>Skill 3</li>
+                <li>Skill 4</li>
+                <li>Skill 5</li>
+                <li>Skill 6</li>
+              </ul>
+            </div>`,
+            x: 50,
+            y: 480,
+            width: 500,
+            height: 150,
+            style: {
+              padding: "10px",
+              backgroundColor: "#f9fafb",
             },
             locked: false,
           },
@@ -1245,7 +1414,7 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
               // Try to find a matching element in the original template
               const selector =
                 contentElement.tagName +
-                (contentElement.id ? `#${contentElement.id}` : "") +
+                (contentElement.id ? `#contentElement.id}` : "") +
                 (contentElement.className ? `.${contentElement.className.split(" ").join(".")}` : "")
 
               try {
@@ -1280,6 +1449,10 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
           case "text":
           case "heading":
           case "container":
+          case "experience":
+          case "education":
+          case "skills":
+          case "header":
             elementHtml = `<div style="position: absolute; left: ${element.x}px; top: ${element.y}px; width: ${element.width}px; height: ${element.height}px; ${styleToString(element.style)}">${element.content}</div>`
             break
           case "image":
@@ -1344,52 +1517,6 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
       document.exitFullscreen()
     }
   }
-
-  // Comment out or remove the exportToPdf function
-  /*
-  const exportToPdf = async () => {
-    try {
-      const html2pdfModule = await import("html2pdf.js")
-      const html2pdf = html2pdfModule.default
-
-      // Generate HTML
-      const html = generateHtml()
-
-      // Create a temporary div for the PDF content
-      const tempDiv = document.createElement("div")
-      tempDiv.innerHTML = html
-
-      // Add CSS to the element
-      if (templateCss) {
-        const style = document.createElement("style")
-        style.textContent = templateCss
-        tempDiv.appendChild(style)
-      }
-
-      const opt = {
-        margin: 0,
-        filename: "resume.pdf",
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      }
-
-      html2pdf().set(opt).from(tempDiv).save()
-
-      toast({
-        title: "PDF Exported",
-        description: "Your resume has been exported as a PDF.",
-      })
-    } catch (error) {
-      console.error("Error exporting to PDF:", error)
-      toast({
-        title: "Export Failed",
-        description: "Failed to export PDF. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-  */
 
   // Handle toolbar item drag start
   const handleToolbarDragStart = (e, type) => {
@@ -1626,10 +1753,6 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
               </TabsTrigger>
             </TabsList>
           </Tabs>
-
-          {lastSaved && (
-            <span className="text-xs text-muted-foreground ml-4">Last saved: {lastSaved.toLocaleTimeString()}</span>
-          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -1649,7 +1772,7 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
 
           <Button onClick={handleSave}>
             <Save className="h-4 w-4 mr-2" />
-            Save & Continue
+            Save
           </Button>
         </div>
       </div>
@@ -1668,7 +1791,25 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
               </TabsList>
               <TabsContent value="elements" className="p-0">
                 <div className="p-4 space-y-4">
-                  <h3 className="font-medium">Add Elements</h3>
+                  <h3 className="font-medium">Resume Sections</h3>
+                  <div className="space-y-2">
+                    <ToolbarItem type="header" label="Header" icon={Type} onDragStart={handleToolbarDragStart} />
+                    <ToolbarItem
+                      type="experience"
+                      label="Experience"
+                      icon={Layers}
+                      onDragStart={handleToolbarDragStart}
+                    />
+                    <ToolbarItem
+                      type="education"
+                      label="Education"
+                      icon={Layers}
+                      onDragStart={handleToolbarDragStart}
+                    />
+                    <ToolbarItem type="skills" label="Skills" icon={Layers} onDragStart={handleToolbarDragStart} />
+                  </div>
+
+                  <h3 className="font-medium mt-6">Basic Elements</h3>
                   <div className="space-y-2">
                     <ToolbarItem type="text" label="Text" icon={Type} onDragStart={handleToolbarDragStart} />
                     <ToolbarItem type="heading" label="Heading" icon={Type} onDragStart={handleToolbarDragStart} />
@@ -1749,24 +1890,6 @@ const CanvasResumeBuilder = ({ templateHtml, templateCss, onSave }: CanvasResume
       </div>
     </div>
   )
-}
-
-const checkForCollision = (newElement, currentElements) => {
-  // Skip collision check for the element being moved
-  const otherElements = currentElements.filter((el) => el.id !== newElement.id)
-
-  for (const element of otherElements) {
-    // Simple box collision detection
-    if (
-      newElement.x < element.x + element.width &&
-      newElement.x + newElement.width > element.x &&
-      newElement.y < element.y + element.height &&
-      newElement.y + newElement.height > element.y
-    ) {
-      return true // Collision detected
-    }
-  }
-  return false // No collision
 }
 
 export default CanvasResumeBuilder
