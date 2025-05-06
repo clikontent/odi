@@ -60,19 +60,23 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function fetchData() {
+      // Add this at the top of your useEffect
+      const controller = new AbortController()
+      const { signal } = controller
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser()
 
         if (user) {
-          // Fetch recent resumes
+          // Optimize your Supabase queries by selecting only needed fields
           const { data: resumeData, error: resumeError } = await supabase
             .from("resumes")
-            .select("*")
+            .select("id, title, updated_at") // Only select fields you need
             .eq("user_id", user.id)
             .order("updated_at", { ascending: false })
             .limit(3)
+            .abortSignal(signal) // Add abort signal for cleanup
 
           if (resumeError) throw resumeError
           setRecentResumes(resumeData || [])
@@ -112,6 +116,11 @@ export default function Dashboard() {
     }
 
     fetchData()
+
+    // Add this to your useEffect cleanup
+    return () => {
+      controller.abort()
+    }
   }, [])
 
   const features = [

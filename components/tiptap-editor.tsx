@@ -6,6 +6,7 @@ import Underline from "@tiptap/extension-underline"
 import TextAlign from "@tiptap/extension-text-align"
 import { Button } from "@/components/ui/button"
 import { Bold, Italic, UnderlineIcon, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
+import { useState, useEffect } from "react"
 
 interface TiptapProps {
   content: string
@@ -14,6 +15,12 @@ interface TiptapProps {
 }
 
 export function Tiptap({ content, onChange, onBlur }: TiptapProps) {
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -26,7 +33,7 @@ export function Tiptap({ content, onChange, onBlur }: TiptapProps) {
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML())
     },
-    onBlur: ({ event }) => {
+    onBlur: ({ editor }) => {
       if (onBlur) onBlur()
     },
     editorProps: {
@@ -35,6 +42,11 @@ export function Tiptap({ content, onChange, onBlur }: TiptapProps) {
       },
     },
   })
+
+  // Don't render until client-side to avoid hydration issues
+  if (!isMounted) {
+    return <div className="border rounded-md p-4 min-h-[100px]">Loading editor...</div>
+  }
 
   if (!editor) {
     return null

@@ -43,12 +43,28 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", req.url))
   }
 
-  return res
+  // Clone the response
+  const response = NextResponse.next()
+
+  // Add caching headers for static assets
+  if (
+    req.nextUrl.pathname.startsWith("/_next/static") ||
+    req.nextUrl.pathname.startsWith("/images") ||
+    req.nextUrl.pathname.includes(".svg") ||
+    req.nextUrl.pathname.includes(".png") ||
+    req.nextUrl.pathname.includes(".jpg")
+  ) {
+    // Cache static assets for 1 week
+    response.headers.set("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400")
+  }
+
+  return response
 }
 
 // Specify which routes this middleware should run on
 export const config = {
   matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
     "/dashboard/:path*",
     "/settings/:path*",
     "/files/:path*",
