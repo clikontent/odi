@@ -5,129 +5,120 @@ import type React from "react"
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, Loader2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function SignupPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [fullName, setFullName] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [isCorporate, setIsCorporate] = useState(false)
-  const [companyName, setCompanyName] = useState("")
-  const [companySize, setCompanySize] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [accountType, setAccountType] = useState("individual")
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = createClientComponentClient()
 
-  const handleSignUp = async (e: React.FormEvent) => {
+  // Individual form state
+  const [individualForm, setIndividualForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    agreeTerms: false,
+  })
+
+  // Corporate form state
+  const [corporateForm, setCorporateForm] = useState({
+    companyName: "",
+    companySize: "",
+    fullName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    agreeTerms: false,
+  })
+
+  const handleIndividualChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target
+    setIndividualForm({
+      ...individualForm,
+      [name]: type === "checkbox" ? checked : value,
+    })
+  }
+
+  const handleCorporateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = e.target
+    setCorporateForm({
+      ...corporateForm,
+      [name]: type === "checkbox" ? checked : value,
+    })
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError(null)
+    setIsLoading(true)
 
     try {
-      // Step 1: Sign up with Supabase Auth
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
+      const formData = accountType === "individual" ? individualForm : corporateForm
+
+      // Validate passwords match
+      if (formData.password !== formData.confirmPassword) {
+        toast({
+          title: "Passwords do not match",
+          description: "Please ensure both passwords match.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Validate terms agreement
+      if (!formData.agreeTerms) {
+        toast({
+          title: "Terms and Conditions",
+          description: "Please agree to the terms and conditions to continue.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Create user in Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
         options: {
           data: {
-            full_name: fullName,
-            is_corporate: isCorporate,
-            company_name: isCorporate ? companyName : null,
-            company_size: isCorporate ? companySize : null,
+            full_name: formData.fullName,
+            is_corporate: accountType === "corporate",
+            company_name: accountType === "corporate" ? corporateForm.companyName : null,
+            company_size: accountType === "corporate" ? corporateForm.companySize : null,
           },
         },
       })
 
-      if (signUpError) throw signUpError
+      if (error) throw error
 
-      if (!data.user) {
-        throw new Error("User creation failed. Please try again.")
-      }
-
-      // Step 2: Wait to ensure user is created in auth.users
-      // This helps prevent race conditions
+      // Wait for the user to be fully created
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // Step 3: Verify user exists before proceeding
-      const { data: userData, error: userCheckError } = await supabase.auth.getUser()
-
-      if (userCheckError) throw userCheckError
-      if (!userData.user) {
-        throw new Error("User verification failed. Please try again or contact support.")
-      }
-
-      // Step 4: Create profile in the database - only after user is verified
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        email: email.toLowerCase(),
-        full_name: fullName,
-        subscription_tier: "free", // Always default to free tier
-        company_name: isCorporate ? companyName : null,
-        company_size: isCorporate ? companySize : null,
-        subscription_end_date: null, // No end date for free tier
-      })
-
-      if (profileError) {
-        console.error("Profile creation error:", profileError)
-        // Continue despite profile error - we can fix this later
-      }
-
-      // Step 5: Create user settings
-      const { error: settingsError } = await supabase.from("user_settings").insert({
-        user_id: data.user.id,
-        email_notifications: true,
-        application_updates: true,
-        marketing_emails: false,
-        job_alerts: true,
-        theme: "system",
-        language: "en",
-        timezone: "UTC",
-      })
-
-      if (settingsError) {
-        console.error("Settings creation error:", settingsError)
-        // Continue despite settings error - we can fix this later
-      }
+      // Redirect to pricing page
+      router.push("/pricing")
 
       toast({
-        title: "Account created successfully",
-        description: "Please check your email to verify your account.",
+        title: "Account created!",
+        description: "Please choose a subscription plan to continue.",
       })
-
-      // Always redirect to dashboard after signup
-      router.push("/dashboard")
     } catch (error: any) {
       console.error("Error signing up:", error)
-      setError(error.message || "An error occurred during sign up")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleOAuthSignUp = async (provider: "google" | "facebook") => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create account. Please try again.",
+        variant: "destructive",
       })
-
-      if (error) throw error
-    } catch (error: any) {
-      console.error(`Error signing in with ${provider}:`, error)
-      setError(error.message || `An error occurred during ${provider} sign in`)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -139,144 +130,200 @@ export default function SignupPage() {
           <p className="text-sm text-muted-foreground">Enter your details below to create your account</p>
         </div>
 
-        <Tabs defaultValue="email" className="w-full">
+        <Tabs defaultValue="individual" className="w-full" onValueChange={setAccountType}>
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="email">Email</TabsTrigger>
-            <TabsTrigger value="oauth">Google/Facebook</TabsTrigger>
+            <TabsTrigger value="individual">Individual</TabsTrigger>
+            <TabsTrigger value="corporate">Corporate</TabsTrigger>
           </TabsList>
-          <TabsContent value="email">
-            <Card>
-              <form onSubmit={handleSignUp}>
-                <CardContent className="pt-4">
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="fullName">Full Name</Label>
-                      <Input
-                        id="fullName"
-                        placeholder="John Doe"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="name@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="corporate"
-                        checked={isCorporate}
-                        onCheckedChange={(checked) => setIsCorporate(checked === true)}
-                      />
-                      <label
-                        htmlFor="corporate"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        Register as a corporate user
-                      </label>
-                    </div>
-
-                    {isCorporate && (
-                      <div className="space-y-4 pt-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="companyName">Company Name</Label>
-                          <Input
-                            id="companyName"
-                            placeholder="Acme Inc."
-                            value={companyName}
-                            onChange={(e) => setCompanyName(e.target.value)}
-                            required={isCorporate}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="companySize">Company Size</Label>
-                          <Input
-                            id="companySize"
-                            placeholder="e.g., 1-10, 11-50, 51-200, 201+"
-                            value={companySize}
-                            onChange={(e) => setCompanySize(e.target.value)}
-                            required={isCorporate}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating account...
-                      </>
-                    ) : (
-                      "Sign Up"
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </Card>
+          <TabsContent value="individual">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fullName">Full Name</Label>
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  placeholder="John Doe"
+                  required
+                  value={individualForm.fullName}
+                  onChange={handleIndividualChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  placeholder="john@example.com"
+                  required
+                  type="email"
+                  value={individualForm.email}
+                  onChange={handleIndividualChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  required
+                  type="password"
+                  value={individualForm.password}
+                  onChange={handleIndividualChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  required
+                  type="password"
+                  value={individualForm.confirmPassword}
+                  onChange={handleIndividualChange}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="agreeTerms"
+                  name="agreeTerms"
+                  checked={individualForm.agreeTerms}
+                  onCheckedChange={(checked) =>
+                    setIndividualForm({ ...individualForm, agreeTerms: checked as boolean })
+                  }
+                />
+                <label
+                  htmlFor="agreeTerms"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  I agree to the{" "}
+                  <Link href="/terms" className="text-primary underline">
+                    terms and conditions
+                  </Link>
+                </label>
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Please wait
+                  </>
+                ) : (
+                  "Sign Up"
+                )}
+              </Button>
+            </form>
           </TabsContent>
-          <TabsContent value="oauth">
-            <Card>
-              <CardHeader>
-                <CardTitle>Social Sign Up</CardTitle>
-                <CardDescription>Sign up with your social accounts</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col space-y-4">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => handleOAuthSignUp("google")}
-                  disabled={loading}
+          <TabsContent value="corporate">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="companyName">Company Name</Label>
+                <Input
+                  id="companyName"
+                  name="companyName"
+                  placeholder="Acme Inc."
+                  required
+                  value={corporateForm.companyName}
+                  onChange={handleCorporateChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="companySize">Company Size</Label>
+                <Select
+                  value={corporateForm.companySize}
+                  onValueChange={(value) => setCorporateForm({ ...corporateForm, companySize: value })}
                 >
-                  Continue with Google
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => handleOAuthSignUp("facebook")}
-                  disabled={loading}
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select company size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1-10">1-10 employees</SelectItem>
+                    <SelectItem value="11-50">11-50 employees</SelectItem>
+                    <SelectItem value="51-200">51-200 employees</SelectItem>
+                    <SelectItem value="201-500">201-500 employees</SelectItem>
+                    <SelectItem value="501+">501+ employees</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fullName">Your Full Name</Label>
+                <Input
+                  id="fullName"
+                  name="fullName"
+                  placeholder="John Doe"
+                  required
+                  value={corporateForm.fullName}
+                  onChange={handleCorporateChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Work Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  placeholder="john@company.com"
+                  required
+                  type="email"
+                  value={corporateForm.email}
+                  onChange={handleCorporateChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  required
+                  type="password"
+                  value={corporateForm.password}
+                  onChange={handleCorporateChange}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  required
+                  type="password"
+                  value={corporateForm.confirmPassword}
+                  onChange={handleCorporateChange}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="agreeTerms"
+                  name="agreeTerms"
+                  checked={corporateForm.agreeTerms}
+                  onCheckedChange={(checked) => setCorporateForm({ ...corporateForm, agreeTerms: checked as boolean })}
+                />
+                <label
+                  htmlFor="agreeTerms"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
-                  Continue with Facebook
-                </Button>
-              </CardContent>
-            </Card>
+                  I agree to the{" "}
+                  <Link href="/terms" className="text-primary underline">
+                    terms and conditions
+                  </Link>
+                </label>
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Please wait
+                  </>
+                ) : (
+                  "Sign Up"
+                )}
+              </Button>
+            </form>
           </TabsContent>
         </Tabs>
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="text-center text-sm">
+        <p className="px-8 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link href="/login" className="underline underline-offset-4 hover:text-primary">
-            Sign in
+            Log in
           </Link>
-        </div>
+        </p>
       </div>
     </div>
   )

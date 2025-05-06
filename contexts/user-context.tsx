@@ -1,159 +1,274 @@
 "use client"
 
-import type React from "react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { supabase } from "@/lib/supabase"
+import type { UserProfile, UserStats, UserSettings } from "@/types/user"
 
-import { createContext, useContext, useEffect, useState } from "react"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { useRouter } from "next/navigation"
-import { Loader2 } from "lucide-react"
-
-type UserContextType = {
-  user: any
-  profile: any
+interface UserContextType {
+  user: UserProfile | null
   isLoading: boolean
+  userStats: UserStats | null
+  userSettings: UserSettings | null
+  refreshUser: () => Promise<void>
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>
+  updateSettings: (updates: Partial<UserSettings>) => Promise<void>
   signOut: () => Promise<void>
-  refreshProfile: () => Promise<void>
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined)
 
-export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
+export function UserProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<UserProfile | null>(null)
+  const [userStats, setUserStats] = useState<UserStats | null>(null)
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const router = useRouter()
-  const supabase = createClientComponentClient()
 
-  // Function to fetch user profile
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
-
-      if (error) {
-        console.error("Error fetching profile:", error)
-        return null
-      }
-
-      return data
-    } catch (error) {
-      console.error("Error in fetchProfile:", error)
-      return null
-    }
-  }
-
-  // Function to refresh profile data
-  const refreshProfile = async () => {
-    if (!user) return
-
-    const profileData = await fetchProfile(user.id)
-    if (profileData) {
-      setProfile(profileData)
-    }
-  }
-
-  // Sign out function
-  const signOut = async () => {
-    try {
-      await supabase.auth.signOut()
-      setUser(null)
-      setProfile(null)
-      router.push("/login")
-    } catch (error) {
-      console.error("Error signing out:", error)
-    }
-  }
-
-  // Effect to handle auth state changes
   useEffect(() => {
-    const initializeAuth = async () => {
-      setIsLoading(true)
-
+    const fetchUserData = async () => {
       try {
-        // Get current session
+        setIsLoading(true)
+
+        // Get current user
         const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession()
+          data: { user: authUser },
+        } = await supabase.auth.getUser()
 
-        if (error) {
-          throw error
+        if (!authUser) {
+          setUser(null)
+          setUserStats(null)
+          setUserSettings(null)
+          return
         }
 
-        if (session?.user) {
-          setUser(session.user)
+        // Get user profile
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", authUser.id)
+          .single()
 
-          // Fetch profile data
-          const profileData = await fetchProfile(session.user.id)
+        if (profileError) {
+          if (profileError.code === "PGRST116") {
+            // Profile doesn't exist yet, create it
+            console.log("Profile not found, creating one")
+            const { data: userData } = await supabase.auth.getUser()
 
-          if (profileData) {
-            setProfile(profileData)
-          } else {
-            // If profile doesn't exist, create a default one
-            const { error: insertError } = await supabase.from("profiles").insert({
-              id: session.user.id,
-              email: session.user.email,
-              full_name: session.user.user_metadata?.full_name || "",
-              subscription_tier: "free",
-              subscription_end_date: null,
-            })
-
-            if (insertError) {
-              console.error("Error creating default profile:", insertError)
-            } else {
-              // Fetch the newly created profile
-              const newProfile = await fetchProfile(session.user.id)
-              if (newProfile) {
-                setProfile(newProfile)
+            if (userData.user) {
+              const newProfile = {
+                id: authUser.id,
+                email: userData.user.email || "",
+                full_name: userData.user.user_metadata?.full_name || "",
+                subscription_tier: userData.user.user_metadata?.is_corporate ? "pending_corporate" : "free",
+                company_name: userData.user.user_metadata?.company_name || null,
+                company_size: userData.user.user_metadata?.company_size || null,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
               }
+
+              const { data: createdProfile, error: createError } = await supabase
+                .from("profiles")
+                .insert(newProfile)
+                .select()
+                .single()
+
+              if (createError) {
+                console.error("Error creating profile:", createError)
+                throw createError
+              }
+
+              setUser(createdProfile as UserProfile)
+            } else {
+              throw new Error("User not found")
             }
+          } else {
+            console.error("Error fetching profile:", profileError)
+            throw profileError
           }
+        } else {
+          setUser(profileData as UserProfile)
         }
+
+        // Get user settings
+        const { data: settingsData, error: settingsError } = await supabase
+          .from("user_settings")
+          .select("*")
+          .eq("user_id", authUser.id)
+          .single()
+
+        if (settingsError && settingsError.code !== "PGRST116") {
+          throw settingsError
+        }
+
+        // Get user stats
+        const { data: statsData, error: statsError } = await supabase.rpc("get_user_stats", {
+          user_id_param: authUser.id,
+        })
+
+        if (statsError && statsError.code !== "PGRST116") {
+          throw statsError
+        }
+
+        setUser(profileData as UserProfile)
+        setUserSettings(
+          (settingsData as UserSettings) || {
+            id: "",
+            user_id: authUser.id,
+            email_notifications: true,
+            application_updates: true,
+            marketing_emails: false,
+            job_alerts: true,
+            two_factor_auth: false,
+            theme: "system",
+            language: "en",
+            timezone: "UTC",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        )
+        setUserStats(
+          statsData || {
+            total_resumes: 0,
+            total_cover_letters: 0,
+            total_applications: 0,
+            total_files: 0,
+            storage_used: 0,
+            storage_limit: 100 * 1024 * 1024, // 100MB for free users
+          },
+        )
       } catch (error) {
-        console.error("Auth initialization error:", error)
+        console.error("Error fetching user data:", error)
       } finally {
         setIsLoading(false)
       }
     }
 
-    // Initialize auth
-    initializeAuth()
+    fetchUserData()
 
-    // Subscribe to auth changes
+    // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_IN" && session?.user) {
-        setUser(session.user)
-        const profileData = await fetchProfile(session.user.id)
-        if (profileData) {
-          setProfile(profileData)
-        }
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        fetchUserData()
       } else if (event === "SIGNED_OUT") {
         setUser(null)
-        setProfile(null)
+        setUserStats(null)
+        setUserSettings(null)
       }
     })
 
-    // Cleanup subscription
     return () => {
       subscription.unsubscribe()
     }
-  }, [supabase, router])
+  }, [])
 
-  // Show loading state
-  if (isLoading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    )
+  const refreshUser = async () => {
+    try {
+      setIsLoading(true)
+
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser()
+
+      if (!authUser) {
+        setUser(null)
+        return
+      }
+
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", authUser.id).single()
+
+      if (error) throw error
+
+      setUser(data as UserProfile)
+    } catch (error) {
+      console.error("Error refreshing user:", error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  return (
-    <UserContext.Provider value={{ user, profile, isLoading, signOut, refreshProfile }}>
-      {children}
-    </UserContext.Provider>
-  )
+  const updateProfile = async (updates: Partial<UserProfile>) => {
+    try {
+      if (!user) return
+
+      const { error } = await supabase.from("profiles").update(updates).eq("id", user.id)
+
+      if (error) throw error
+
+      setUser({ ...user, ...updates })
+
+      // Log activity
+      await supabase.from("activity_logs").insert({
+        user_id: user.id,
+        action: "update",
+        entity_type: "profile",
+        entity_id: user.id,
+        details: { updated_fields: Object.keys(updates) },
+      })
+    } catch (error) {
+      console.error("Error updating profile:", error)
+      throw error
+    }
+  }
+
+  const updateSettings = async (updates: Partial<UserSettings>) => {
+    try {
+      if (!user || !userSettings) return
+
+      // Check if settings exist
+      const { data: existingSettings } = await supabase
+        .from("user_settings")
+        .select("id")
+        .eq("user_id", user.id)
+        .single()
+
+      if (existingSettings) {
+        // Update existing settings
+        const { error } = await supabase.from("user_settings").update(updates).eq("user_id", user.id)
+
+        if (error) throw error
+      } else {
+        // Create new settings
+        const { error } = await supabase.from("user_settings").insert({
+          user_id: user.id,
+          ...userSettings,
+          ...updates,
+        })
+
+        if (error) throw error
+      }
+
+      setUserSettings({ ...userSettings, ...updates })
+    } catch (error) {
+      console.error("Error updating settings:", error)
+      throw error
+    }
+  }
+
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut()
+      setUser(null)
+      setUserStats(null)
+      setUserSettings(null)
+      window.location.href = "/"
+    } catch (error) {
+      console.error("Error signing out:", error)
+    }
+  }
+
+  const value = {
+    user,
+    isLoading,
+    userStats,
+    userSettings,
+    refreshUser,
+    updateProfile,
+    updateSettings,
+    signOut,
+  }
+
+  return <UserContext.Provider value={value}>{children}</UserContext.Provider>
 }
 
 export function useUser() {
