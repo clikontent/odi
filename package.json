@@ -75,7 +75,6 @@
     "html2pdf.js": "latest",
     "file-saver": "latest",
     "@google/generative-ai": "latest",
-    "@supabase/supabaseClient.ts": "latest",
     "ai": "latest",
     "@ai-sdk/google": "latest",
     "@supabase/auth-helpers-nextjs": "latest"
