@@ -1,5 +1,15 @@
 import type React from "react"
+import { Navbar } from "@/components/navbar"
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return <>{children}</>
+interface DashboardLayoutProps {
+  children: React.ReactNode
+}
+
+export function DashboardLayout({ children }: DashboardLayoutProps) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+      <main className="flex-1 bg-muted/40">{children}</main>
+    </div>
+  )
 }

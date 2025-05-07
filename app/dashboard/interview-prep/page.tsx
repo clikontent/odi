@@ -3,21 +3,32 @@
 import { useState, useEffect } from "react"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { InterviewPrepTool } from "@/components/interview-prep-tool"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabaseClient"
+import { useUser } from "@/contexts/user-context"
+import { Loader2 } from "lucide-react"
 
 export default function InterviewPrepPage() {
+  const { user } = useUser()
   const [userId, setUserId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function getUserId() {
+      if (user) {
+        setUserId(user.id)
+        setLoading(false)
+        return
+      }
+
       const { data } = await supabase.auth.getUser()
       if (data?.user) {
         setUserId(data.user.id)
       }
+      setLoading(false)
     }
 
     getUserId()
-  }, [])
+  }, [user])
 
   return (
     <DashboardLayout>
@@ -30,7 +41,11 @@ export default function InterviewPrepPage() {
             </p>
           </div>
 
-          {userId ? (
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+          ) : userId ? (
             <InterviewPrepTool userId={userId} />
           ) : (
             <div className="flex items-center justify-center h-64 bg-muted rounded-lg">

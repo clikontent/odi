@@ -11,8 +11,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
-import { Facebook, Loader2, AlertCircle, CheckCircle } from "lucide-react"
+import { Facebook, Loader2, AlertCircle, CheckCircle, Check } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -24,6 +25,7 @@ export default function LoginPage() {
   } | null>(null)
   const router = useRouter()
   const { toast } = useToast()
+  const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly")
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -104,25 +106,149 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-muted/40">
-      <div className="grid w-full max-w-[1200px] grid-cols-1 md:grid-cols-2 gap-8 p-4 md:p-8">
+    <div className="flex min-h-screen flex-col">
+      <div className="grid w-full grid-cols-1 md:grid-cols-2 gap-8 p-4 md:p-8">
         <div className="flex flex-col justify-center space-y-6 rounded-lg bg-primary/5 p-8">
           <div>
-            <h1 className="text-3xl font-bold">ResumeAI</h1>
+            <h1 className="text-3xl font-bold">CV Chap Chap</h1>
             <p className="text-xl text-muted-foreground mt-2">Build your career with AI-powered tools</p>
           </div>
-          <blockquote className="border-l-4 border-primary pl-4 italic">
-            "The future belongs to those who believe in the beauty of their dreams."
-            <footer className="text-sm text-muted-foreground mt-2">— Eleanor Roosevelt</footer>
-          </blockquote>
-          <img
-            src="/placeholder.svg?height=400&width=400"
-            alt="Login illustration"
-            className="mx-auto rounded-lg object-cover"
-            width={400}
-            height={400}
-          />
+
+          <div className="space-y-4">
+            <h2 className="text-2xl font-semibold">Choose the right plan for you</h2>
+
+            <Tabs
+              defaultValue="monthly"
+              className="w-full"
+              onValueChange={(v) => setBillingInterval(v as "monthly" | "yearly")}
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="monthly">Monthly</TabsTrigger>
+                <TabsTrigger value="yearly">Yearly (Save 30%)</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="monthly" className="mt-4 space-y-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle>Free Plan</CardTitle>
+                    <CardDescription>Pay-per-use, try before you buy</CardDescription>
+                    <div className="mt-1 text-2xl font-bold">Free</div>
+                  </CardHeader>
+                  <CardContent className="pb-2">
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>5 Free AI-Generated Cover Letters</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>One-Time Resume Download (KES 500)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>Basic ATS Score (No Fixes)</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-primary">
+                  <CardHeader className="pb-2">
+                    <div className="bg-primary text-primary-foreground text-xs font-medium px-2 py-1 rounded-full w-fit mb-1">
+                      MOST POPULAR
+                    </div>
+                    <CardTitle>Premium Plan</CardTitle>
+                    <CardDescription>Maximum value for job seekers</CardDescription>
+                    <div className="mt-1 text-2xl font-bold">
+                      KES 1,000<span className="text-sm font-normal text-muted-foreground">/month</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pb-2">
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>Unlimited AI-Generated Cover Letters</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>Full ATS Optimization</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>10 Resume Downloads (All Templates)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>AI Interview Prep Tool</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="yearly" className="mt-4 space-y-4">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle>Free Plan</CardTitle>
+                    <CardDescription>Pay-per-use, try before you buy</CardDescription>
+                    <div className="mt-1 text-2xl font-bold">Free</div>
+                  </CardHeader>
+                  <CardContent className="pb-2">
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>5 Free AI-Generated Cover Letters</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>One-Time Resume Download (KES 500)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>Basic ATS Score (No Fixes)</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-primary">
+                  <CardHeader className="pb-2">
+                    <div className="bg-primary text-primary-foreground text-xs font-medium px-2 py-1 rounded-full w-fit mb-1">
+                      BEST VALUE
+                    </div>
+                    <CardTitle>Premium Plan</CardTitle>
+                    <CardDescription>Maximum value for job seekers</CardDescription>
+                    <div className="mt-1 text-2xl font-bold">
+                      KES 8,000<span className="text-sm font-normal text-muted-foreground">/year</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">Save KES 4,000 compared to monthly</p>
+                  </CardHeader>
+                  <CardContent className="pb-2">
+                    <ul className="space-y-2 text-sm">
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>Unlimited AI-Generated Cover Letters</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>Full ATS Optimization</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>10 Resume Downloads (All Templates)</span>
+                      </li>
+                      <li className="flex items-start">
+                        <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                        <span>AI Interview Prep Tool</span>
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
         </div>
+
         <div className="flex items-center justify-center">
           <Card className="w-full max-w-md">
             <CardHeader>

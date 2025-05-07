@@ -1,72 +1,3 @@
-// Shared types for AI tools integration
-
-export interface JobDetails {
-  companyName: string
-  jobTitle: string
-  hiringManager?: string
-  jobDescription: string
-  requiredSkills?: string[]
-  location?: string
-  salary?: string
-  applicationDeadline?: string
-}
-
-export interface PersonalInfo {
-  fullName: string
-  email?: string
-  phone?: string
-  address?: string
-  relevantExperience?: string
-  skills?: string[]
-  education?: EducationEntry[]
-  workExperience?: WorkExperienceEntry[]
-}
-
-export interface EducationEntry {
-  institution: string
-  degree: string
-  fieldOfStudy?: string
-  startDate?: string
-  endDate?: string
-  description?: string
-}
-
-export interface WorkExperienceEntry {
-  company: string
-  position: string
-  startDate?: string
-  endDate?: string
-  description?: string
-  achievements?: string[]
-}
-
-export interface CoverLetterData {
-  title: string
-  content: string
-  templateId?: string
-  jobDetails: JobDetails
-  personalInfo: PersonalInfo
-  atsScore?: number
-  improvementSuggestions?: string[]
-}
-
-export interface ResumeData {
-  title: string
-  sections: ResumeSection[]
-  templateId?: string
-  personalInfo: PersonalInfo
-  atsScore?: number
-  missingKeywords?: string[]
-  improvementSuggestions?: string[]
-}
-
-export interface ResumeSection {
-  id: string
-  type: "summary" | "experience" | "education" | "skills" | "projects" | "certifications" | "custom"
-  title: string
-  content: string | any[] // Can be string for sections like summary or array for structured data
-}
-
 export interface InterviewQuestion {
   question: string
   context?: string
@@ -79,4 +10,40 @@ export interface AtsAnalysisResult {
   score: number
   missingKeywords: string[]
   suggestions: string[]
+  formattingIssues?: string[]
 }
+
+export interface AIUsageRecord {
+  id?: string
+  user_id: string
+  feature_name: string
+  tokens_used: number
+  model_used: string
+  timestamp?: string
+  created_at?: string
+}
+
+export interface AIModelConfig {
+  name: string
+  provider: "google" | "openai" | "anthropic"
+  maxTokens: number
+  temperature: number
+  costPer1KTokens: number
+}
+
+export const AI_MODELS = {
+  GEMINI_FLASH: {
+    name: "gemini-2.0-flash",
+    provider: "google",
+    maxTokens: 8192,
+    temperature: 0.7,
+    costPer1KTokens: 0.0001,
+  },
+  GEMINI_PRO: {
+    name: "gemini-1.5-pro-latest",
+    provider: "google",
+    maxTokens: 32768,
+    temperature: 0.7,
+    costPer1KTokens: 0.0005,
+  },
+} as const

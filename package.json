@@ -74,10 +74,10 @@
     "@tiptap/extension-image": "latest",
     "html2pdf.js": "latest",
     "file-saver": "latest",
-    "ai": "latest",
-    "@ai-sdk/google": "latest",
+    "@google/generative-ai": "latest",
     "@supabase/auth-helpers-nextjs": "latest",
-    "@google/generative-ai": "latest"
+    "ai": "latest",
+    "@ai-sdk/google": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
