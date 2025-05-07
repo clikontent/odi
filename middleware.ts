@@ -2,39 +2,48 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 
-export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
+export async function middleware(request: NextRequest) {
+  try {
+    // Create a Supabase client configured to use cookies
+    const supabase = createMiddlewareClient({ req: request, res: NextResponse.next() })
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    // Refresh session if expired - required for Server Components
+    await supabase.auth.getSession()
 
-  // Check if the user is authenticated
-  const isAuthenticated = !!session
-  const isAuthPage = req.nextUrl.pathname.startsWith("/login") || req.nextUrl.pathname.startsWith("/signup")
-  const isPublicPage =
-    req.nextUrl.pathname === "/" ||
-    req.nextUrl.pathname.startsWith("/_next") ||
-    req.nextUrl.pathname.startsWith("/api") ||
-    req.nextUrl.pathname.startsWith("/pricing")
+    // Get the pathname
+    const { pathname } = request.nextUrl
 
-  // If user is not authenticated and trying to access a protected route
-  if (!isAuthenticated && !isAuthPage && !isPublicPage) {
-    const redirectUrl = new URL("/login", req.url)
-    redirectUrl.searchParams.set("redirect", req.nextUrl.pathname)
-    return NextResponse.redirect(redirectUrl)
+    // Check if the pathname starts with /dashboard or /settings
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/settings")) {
+      // Get the user's session
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession()
+
+      // If there's an error or no session, redirect to login
+      if (error || !session) {
+        // Create a URL for the login page with a redirect back to the current page
+        const redirectUrl = new URL("/login", request.url)
+        redirectUrl.searchParams.set("redirect", pathname)
+
+        // Redirect to the login page
+        return NextResponse.redirect(redirectUrl)
+      }
+    }
+
+    // Continue with the request
+    return NextResponse.next()
+  } catch (error) {
+    console.error("Middleware error:", error)
+
+    // If there's an error, allow the request to continue
+    // This prevents the middleware from blocking access in case of errors
+    return NextResponse.next()
   }
-
-  // If user is authenticated and trying to access auth pages
-  if (isAuthenticated && isAuthPage) {
-    return NextResponse.redirect(new URL("/dashboard", req.url))
-  }
-
-  return res
 }
 
-// Only run middleware on specific paths
+// Specify which paths the middleware should run on
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|.*\\.svg$).*)"],
+  matcher: ["/dashboard/:path*", "/settings/:path*", "/api/:path*"],
 }
