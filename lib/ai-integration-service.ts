@@ -123,8 +123,6 @@ export async function generateCoverLetter(
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
-      \
-      throw new Error(errorData.error || 'Failed to generate cover=>({}))
       throw new Error(errorData.error || "Failed to generate cover letter")
     }
 

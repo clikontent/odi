@@ -1,82 +1,74 @@
-import { supabase } from "./supabaseClient"
-
 /**
- * Safely execute a fetch request with proper error handling
+ * Safely execute a fetch request with error handling
  */
-export async function safeFetch<T>(url: string, options?: RequestInit, timeout = 10000): Promise<T> {
+export async function safeFetch(url: string, options?: RequestInit) {
   try {
-    // Create an AbortController for timeout handling
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeout)
-
     const response = await fetch(url, {
       ...options,
-      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options?.headers || {}),
+      },
     })
 
-    clearTimeout(timeoutId)
-
     if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`)
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || "Failed to fetch data")
     }
 
-    return (await response.json()) as T
+    return await response.json()
   } catch (error) {
-    console.error(`Fetch error for ${url}:`, error)
-    if (error instanceof Error) {
-      if (error.name === "AbortError") {
-        throw new Error(`Request to ${url} timed out after ${timeout}ms`)
-      }
-      throw new Error(`Failed to fetch from ${url}: ${error.message}`)
-    }
-    throw new Error(`Unknown error fetching from ${url}`)
+    console.error(`Error fetching from ${url}:`, error)
+    throw error
   }
 }
 
 /**
- * Safely execute a Supabase query with proper error handling
+ * Safely execute a Supabase query with error handling
  */
-export async function safeSupabaseQuery<T>(queryFn: () => Promise<{ data: T | null; error: any }>): Promise<T> {
+export async function safeSupabaseQuery<T>(queryFn: () => Promise<{ data: T; error: any }>) {
   try {
     const { data, error } = await queryFn()
 
     if (error) {
       console.error("Supabase query error:", error)
-      throw new Error(`Supabase query failed: ${error.message || "Unknown error"}`)
+      throw new Error(error.message || "Database query failed")
     }
 
-    if (data === null) {
-      throw new Error("No data returned from Supabase query")
-    }
-
-    return data
+    return data || []
   } catch (error) {
-    console.error("Error in safeSupabaseQuery:", error)
-    if (error instanceof Error) {
-      throw error
-    }
-    throw new Error("Unknown error in Supabase query")
+    console.error("Error executing Supabase query:", error)
+    return []
   }
 }
 
 /**
- * Check if the user is authenticated
+ * Safely generate a cover letter with error handling
  */
-export async function checkAuthentication() {
+export async function generateCoverLetter(formData: {
+  jobTitle: string
+  companyName: string
+  jobDescription: string
+  relevantExperience: string
+  skills: string[]
+}) {
   try {
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession()
+    const response = await fetch("/api/generate-cover-letter", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(formData),
+    })
 
-    if (error) {
-      console.error("Authentication check error:", error)
-      return false
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || "Failed to generate cover letter")
     }
 
-    return !!session
+    return await response.json()
   } catch (error) {
-    console.error("Error checking authentication:", error)
-    return false
+    console.error("Error generating cover letter:", error)
+    throw error
   }
 }
