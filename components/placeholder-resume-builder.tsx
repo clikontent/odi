@@ -10,7 +10,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import { toast } from "@/components/ui/use-toast"
 import {
   Download,
@@ -25,11 +24,11 @@ import {
   Minimize2,
   PanelLeftClose,
   PanelLeftOpen,
-  Info,
+  Lock,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { generateSummary, suggestSkills, suggestAchievements } from "@/lib/gemini"
+import { useUser } from "@/contexts/user-context"
 
 interface PlaceholderResumeBuilderProps {
   templateHtml: string
@@ -58,7 +57,7 @@ interface WorkExperience {
   endDate: string
   currentlyWorkHere: boolean
   description: string
-  achievements: string[]
+  responsibilities: string[]
 }
 
 interface Education {
@@ -100,7 +99,6 @@ interface ResumeData {
   workExperiences: WorkExperience[]
   educations: Education[]
   skills: string[]
-  achievements: string[]
   summary: string
   references: Reference[]
   extraSections: ExtraSection[]
@@ -124,6 +122,8 @@ const SuggestionCard = ({ suggestion, onAdd }: { suggestion: string; onAdd: () =
 
 // Main component
 const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: PlaceholderResumeBuilderProps) => {
+  const { user, profile } = useUser()
+
   // State for resume data
   const [resumeData, setResumeData] = useState<ResumeData>({
     personalInfo: {
@@ -147,7 +147,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
         currentlyWorkHere: true,
         description:
           "Leading development of enterprise web applications using React, Node.js, and AWS. Managing a team of 5 developers and coordinating with product managers to deliver high-quality software solutions.",
-        achievements: [
+        responsibilities: [
           "Reduced application load time by 40% through code optimization",
           "Implemented CI/CD pipeline that reduced deployment time by 60%",
           "Led migration from monolith to microservices architecture",
@@ -163,7 +163,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
         currentlyWorkHere: false,
         description:
           "Developed and maintained web applications for clients in the finance and healthcare sectors. Worked with JavaScript, PHP, and MySQL.",
-        achievements: [
+        responsibilities: [
           "Developed a patient management system that improved record retrieval by 75%",
           "Created custom reporting tools that saved clients 10+ hours per week",
         ],
@@ -193,11 +193,6 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
       "Agile Methodologies",
       "System Design",
     ],
-    achievements: [
-      "Published article on microservices architecture in Tech Magazine",
-      "Speaker at East Africa Developer Conference 2022",
-      "Open source contributor to popular JavaScript frameworks",
-    ],
     summary:
       "Experienced software engineer with over 5 years of expertise in full-stack development. Specialized in building scalable web applications using modern JavaScript frameworks and cloud technologies. Proven track record of leading development teams and delivering high-quality software solutions that meet business objectives.",
     references: [
@@ -225,7 +220,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
 
   // State for AI suggestions
   const [skillSuggestions, setSkillSuggestions] = useState<string[]>([])
-  const [achievementSuggestions, setAchievementSuggestions] = useState<string[]>([])
+  const [responsibilitySuggestions, setResponsibilitySuggestions] = useState<string[]>([])
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false)
 
   // State for completion status
@@ -235,14 +230,20 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
   const [previewHtml, setPreviewHtml] = useState<string>("")
 
   // State for UI controls
-  const [zoomLevel, setZoomLevel] = useState(1)
+  const [zoomLevel, setZoomLevel] = useState(0.9) // Reduced from 1 to 0.9 to fix overflow
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [fullscreenPreview, setFullscreenPreview] = useState(false)
   const [showPlaceholderInfo, setShowPlaceholderInfo] = useState(false)
 
-  // Add the zoom state near the top of the component with other state variables
-  // Add this after the other useState declarations:
-  //const [zoomLevel, setZoomLevel] = useState(1)
+  // State for payment status
+  const [hasPaid, setHasPaid] = useState(false)
+
+  // Check if user has premium subscription
+  useEffect(() => {
+    if (profile && profile.subscription_tier && profile.subscription_tier !== "free") {
+      setHasPaid(true)
+    }
+  }, [profile])
 
   // Check completion status
   useEffect(() => {
@@ -276,8 +277,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
     if (!templateHtml) return
 
     let html = templateHtml
-    const { personalInfo, workExperiences, educations, skills, achievements, summary, references, extraSections } =
-      resumeData
+    const { personalInfo, workExperiences, educations, skills, summary, references, extraSections } = resumeData
 
     // Replace personal info placeholders
     html = html.replace(/\{FIRST_NAME\}/g, personalInfo.firstName || "First Name")
@@ -306,12 +306,12 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
       )
       html = html.replace(new RegExp(`\\{WORK_DESCRIPTION_${index + 1}\\}`, "g"), exp.description || "Job Description")
 
-      // Handle work achievements for each position
-      const achievementsHtml =
-        exp.achievements.length > 0
-          ? `<ul>${exp.achievements.map((achievement) => `<li>${achievement}</li>`).join("")}</ul>`
-          : "<ul><li>Achievement placeholder</li></ul>"
-      html = html.replace(new RegExp(`\\{WORK_ACHIEVEMENTS_${index + 1}\\}`, "g"), achievementsHtml)
+      // Handle work responsibilities for each position
+      const responsibilitiesHtml =
+        exp.responsibilities.length > 0
+          ? `<ul>${exp.responsibilities.map((responsibility) => `<li>${responsibility}</li>`).join("")}</ul>`
+          : ""
+      html = html.replace(new RegExp(`\\{WORK_ACHIEVEMENTS_${index + 1}\\}`, "g"), responsibilitiesHtml)
     })
 
     // Replace education placeholders - individual fields
@@ -346,14 +346,22 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
       workExperiences.forEach((exp, index) => {
         const placeholderName = `{WORK_EXPERIENCE_${index + 1}}`
         const expHtml = `
-          <div class="work-experience">
+          <div class="work-experience-container">
             <h3>${exp.jobTitle || "Job Title"}</h3>
             <p>${exp.employer || "Employer"} | ${exp.location || "Location"}</p>
             <p>${exp.startDate || "Start Date"} - ${exp.currentlyWorkHere ? "Present" : exp.endDate || "End Date"}</p>
-            <p>${exp.description || "Job Description"}</p>
-            <ul>
-              ${exp.achievements.map((achievement) => `<li>${achievement}</li>`).join("")}
-            </ul>
+            <div class="work-description">
+              <p>${exp.description || "Job Description"}</p>
+              ${
+                exp.responsibilities.length > 0
+                  ? `
+                <ul class="responsibilities-list">
+                  ${exp.responsibilities.map((responsibility) => `<li>${responsibility}</li>`).join("")}
+                </ul>
+              `
+                  : ""
+              }
+            </div>
           </div>
         `
         html = html.replace(placeholderName, expHtml)
@@ -366,16 +374,24 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
       let workExperienceHtml = ""
       workExperiences.forEach((exp, index) => {
         workExperienceHtml += `
-          <div class="work-experience">
+          <div class="work-experience-container">
             <h3>${exp.jobTitle || "Job Title"}</h3>
             <p>${exp.employer || "Employer"} | ${exp.location || "Location"}</p>
             <p>${exp.startDate || "Start Date"} - ${exp.currentlyWorkHere ? "Present" : exp.endDate || "End Date"}</p>
-            <p>${exp.description || "Job Description"}</p>
-            <ul>
-              ${exp.achievements.map((achievement) => `<li>${achievement}</li>`).join("")}
-            </ul>
+            <div class="work-description">
+              <p>${exp.description || "Job Description"}</p>
+              ${
+                exp.responsibilities.length > 0
+                  ? `
+                <ul class="responsibilities-list">
+                  ${exp.responsibilities.map((responsibility) => `<li>${responsibility}</li>`).join("")}
+                </ul>
+              `
+                  : ""
+              }
+            </div>
           </div>
-          ${index < workExperiences.length - 1 ? "<hr>" : ""}
+          ${index < workExperiences.length - 1 ? "<hr class='section-divider'>" : ""}
         `
       })
       html = html.replace(/\{WORK_EXPERIENCE\}/g, workExperienceHtml)
@@ -389,7 +405,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
       educations.forEach((edu, index) => {
         const placeholderName = `{EDUCATION_${index + 1}}`
         const eduHtml = `
-          <div class="education">
+          <div class="education-container">
             <h3>${edu.degree || "Degree"} in ${edu.fieldOfStudy || "Field of Study"}</h3>
             <p>${edu.institution || "Institution"} | ${edu.location || "Location"}</p>
             <p>${edu.graduationDate || "Graduation Date"}</p>
@@ -406,13 +422,13 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
       let educationHtml = ""
       educations.forEach((edu, index) => {
         educationHtml += `
-          <div class="education">
+          <div class="education-container">
             <h3>${edu.degree || "Degree"} in ${edu.fieldOfStudy || "Field of Study"}</h3>
             <p>${edu.institution || "Institution"} | ${edu.location || "Location"}</p>
             <p>${edu.graduationDate || "Graduation Date"}</p>
             <p>${edu.description || ""}</p>
           </div>
-          ${index < educations.length - 1 ? "<hr>" : ""}
+          ${index < educations.length - 1 ? "<hr class='section-divider'>" : ""}
         `
       })
       html = html.replace(/\{EDUCATION\}/g, educationHtml)
@@ -420,32 +436,17 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
 
     // Replace skills placeholder
     if (html.includes("{SKILLS}")) {
-      let skillsHtml = '<ul class="skills-list">'
+      let skillsHtml = '<div class="skills-container"><ul class="skills-list">'
       skills.forEach((skill) => {
         skillsHtml += `<li>${skill}</li>`
       })
-      skillsHtml += "</ul>"
+      skillsHtml += "</ul></div>"
       html = html.replace(/\{SKILLS\}/g, skillsHtml)
     }
 
     // Replace individual skills placeholders
     skills.forEach((skill, index) => {
       html = html.replace(new RegExp(`\\{SKILL_${index + 1}\\}`, "g"), skill)
-    })
-
-    // Replace achievements placeholder
-    if (html.includes("{ACHIEVEMENTS}")) {
-      let achievementsHtml = '<ul class="achievements-list">'
-      achievements.forEach((achievement) => {
-        achievementsHtml += `<li>${achievement}</li>`
-      })
-      achievementsHtml += "</ul>"
-      html = html.replace(/\{ACHIEVEMENTS\}/g, achievementsHtml)
-    }
-
-    // Replace individual achievements placeholders
-    achievements.forEach((achievement, index) => {
-      html = html.replace(new RegExp(`\\{ACHIEVEMENT_${index + 1}\\}`, "g"), achievement)
     })
 
     // Check if the template has individual reference placeholders
@@ -456,7 +457,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
       references.forEach((ref, index) => {
         const placeholderName = `{REFERENCE_${index + 1}}`
         const refHtml = `
-          <div class="reference">
+          <div class="reference-container">
             <h3>${ref.name || "Reference Name"}</h3>
             <p>${ref.position || "Position"} at ${ref.company || "Company"}</p>
             <p>Phone: ${ref.phone || "Phone"}</p>
@@ -470,28 +471,29 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
       html = html.replace(/\{REFERENCE_\d+\}/g, "")
     } else if (html.includes("{REFERENCES}")) {
       // Handle the single references placeholder that contains all references
-      let referencesHtml = ""
+      let referencesHtml = '<div class="references-container">'
       references.forEach((ref, index) => {
         referencesHtml += `
-          <div class="reference">
+          <div class="reference-item">
             <h3>${ref.name || "Reference Name"}</h3>
             <p>${ref.position || "Position"} at ${ref.company || "Company"}</p>
             <p>Phone: ${ref.phone || "Phone"}</p>
             <p>Email: ${ref.email || "Email"}</p>
           </div>
-          ${index < references.length - 1 ? "<hr>" : ""}
+          ${index < references.length - 1 ? "<hr class='section-divider'>" : ""}
         `
       })
+      referencesHtml += "</div>"
       html = html.replace(/\{REFERENCES\}/g, referencesHtml)
     }
 
     // Replace extra sections placeholders
     extraSections.forEach((section) => {
-      let sectionHtml = `<h2>${section.title}</h2><ul class="${section.type}-list">`
+      let sectionHtml = `<div class="extra-section-container"><h2>${section.title}</h2><ul class="${section.type}-list">`
       section.items.forEach((item) => {
         sectionHtml += `<li>${item}</li>`
       })
-      sectionHtml += "</ul>"
+      sectionHtml += "</ul></div>"
       html = html.replace(`{${section.type.toUpperCase()}}`, sectionHtml)
     })
 
@@ -517,8 +519,14 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
           page-break-after: avoid;
         }
         
-        .work-experience, .education, .reference {
+        .work-experience-container, .education-container, .reference-container {
           page-break-inside: avoid;
+          margin-bottom: 1rem;
+        }
+        
+        .section-divider {
+          margin: 1rem 0;
+          border-top: 1px solid #eee;
         }
         
         .page-break {
@@ -543,24 +551,32 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
         margin: 0 auto;
       }
       
-      .work-experience, .education, .reference {
+      .work-experience-container, .education-container, .reference-container {
         margin-bottom: 1rem;
       }
       
-      .skills-list, .achievements-list {
+      .work-description {
+        margin-top: 0.5rem;
+      }
+      
+      .skills-container, .references-container, .extra-section-container {
+        margin-bottom: 1rem;
+      }
+      
+      .skills-list, .responsibilities-list {
         display: flex;
         flex-wrap: wrap;
         gap: 0.5rem;
         list-style-position: inside;
       }
       
-      .skills-list li, .achievements-list li {
+      .skills-list li, .responsibilities-list li {
         flex: 1 1 45%;
         min-width: 200px;
       }
       
       @media (max-width: 768px) {
-        .skills-list li, .achievements-list li {
+        .skills-list li, .responsibilities-list li {
           flex: 1 1 100%;
         }
       }
@@ -601,8 +617,8 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
     }
   }
 
-  // Generate AI suggestions for achievements
-  const generateAchievementSuggestions = async () => {
+  // Generate AI suggestions for responsibilities
+  const generateResponsibilitySuggestions = async () => {
     setIsGeneratingSuggestions(true)
     try {
       // Get the selected work experience
@@ -610,7 +626,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
 
       if (selectedExp && selectedExp.description) {
         const suggestions = await suggestAchievements(selectedExp.description)
-        setAchievementSuggestions(suggestions)
+        setResponsibilitySuggestions(suggestions)
       } else {
         toast({
           title: "Missing Information",
@@ -619,10 +635,10 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
         })
       }
     } catch (error) {
-      console.error("Error generating achievement suggestions:", error)
+      console.error("Error generating responsibility suggestions:", error)
       toast({
         title: "Error",
-        description: "Failed to generate achievement suggestions",
+        description: "Failed to generate responsibility suggestions",
         variant: "destructive",
       })
     } finally {
@@ -677,7 +693,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
           endDate: "",
           currentlyWorkHere: false,
           description: "",
-          achievements: [],
+          responsibilities: [],
         },
       ],
     }))
@@ -786,33 +802,15 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
     }))
   }
 
-  // Handle adding an achievement
-  const addAchievement = (achievement: string) => {
-    if (!resumeData.achievements.includes(achievement)) {
-      setResumeData((prev) => ({
-        ...prev,
-        achievements: [...prev.achievements, achievement],
-      }))
-    }
-  }
-
-  // Handle removing an achievement
-  const removeAchievement = (achievement: string) => {
-    setResumeData((prev) => ({
-      ...prev,
-      achievements: prev.achievements.filter((a) => a !== achievement),
-    }))
-  }
-
-  // Handle adding a work achievement
-  const addWorkAchievement = (workId: string, achievement: string) => {
+  // Handle adding a responsibility to work experience
+  const addWorkResponsibility = (workId: string, responsibility: string) => {
     setResumeData((prev) => ({
       ...prev,
       workExperiences: prev.workExperiences.map((exp) => {
         if (exp.id === workId) {
           return {
             ...exp,
-            achievements: [...exp.achievements, achievement],
+            responsibilities: [...exp.responsibilities, responsibility],
           }
         }
         return exp
@@ -820,15 +818,15 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
     }))
   }
 
-  // Handle removing a work achievement
-  const removeWorkAchievement = (workId: string, achievement: string) => {
+  // Handle removing a work responsibility
+  const removeWorkResponsibility = (workId: string, responsibility: string) => {
     setResumeData((prev) => ({
       ...prev,
       workExperiences: prev.workExperiences.map((exp) => {
         if (exp.id === workId) {
           return {
             ...exp,
-            achievements: exp.achievements.filter((a) => a !== achievement),
+            responsibilities: exp.responsibilities.filter((r) => r !== responsibility),
           }
         }
         return exp
@@ -878,8 +876,17 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
     })
   }
 
-  // Export to PDF
+  // Export to PDF - only available after payment
   const exportToPdf = async () => {
+    if (!hasPaid) {
+      toast({
+        title: "Premium Feature",
+        description: "Please upgrade to a premium plan to export your resume",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       const html2pdfModule = await import("html2pdf.js")
       const html2pdf = html2pdfModule.default
@@ -913,8 +920,17 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
     }
   }
 
-  // Export to Word (DOCX)
+  // Export to Word (DOCX) - only available after payment
   const exportToWord = async () => {
+    if (!hasPaid) {
+      toast({
+        title: "Premium Feature",
+        description: "Please upgrade to a premium plan to export your resume",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       const fileSaverModule = await import("file-saver")
       const saveAs = fileSaverModule.saveAs
@@ -941,7 +957,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
                 page-break-before: always;
               }
               
-              .work-experience, .education, .reference {
+              .work-experience-container, .education-container, .reference-container {
                 page-break-inside: avoid;
               }
             </style>
@@ -1292,11 +1308,11 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
 
               <div className="space-y-1">
                 <div className="flex justify-between items-center">
-                  <Label className="text-sm">Achievements</Label>
+                  <Label className="text-sm">Key Responsibilities & Achievements</Label>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => generateAchievementSuggestions()}
+                    onClick={() => generateResponsibilitySuggestions()}
                     disabled={isGeneratingSuggestions || !exp.description}
                   >
                     <Sparkles className="h-3 w-3 mr-1" />
@@ -1304,15 +1320,15 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
                   </Button>
                 </div>
 
-                {exp.achievements.length > 0 ? (
+                {exp.responsibilities.length > 0 ? (
                   <ul className="space-y-1 list-disc pl-5 text-sm">
-                    {exp.achievements.map((achievement, i) => (
+                    {exp.responsibilities.map((responsibility, i) => (
                       <li key={i} className="flex justify-between items-center group">
-                        <span>{achievement}</span>
+                        <span>{responsibility}</span>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => removeWorkAchievement(exp.id, achievement)}
+                          onClick={() => removeWorkResponsibility(exp.id, responsibility)}
                           className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -1321,19 +1337,19 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-xs text-muted-foreground">No achievements added yet</p>
+                  <p className="text-xs text-muted-foreground">No responsibilities or achievements added yet</p>
                 )}
 
-                {achievementSuggestions.length > 0 && (
+                {responsibilitySuggestions.length > 0 && (
                   <div className="mt-2">
                     <h4 className="text-xs font-medium mb-1">Suggestions</h4>
-                    {achievementSuggestions.map((suggestion, i) => (
+                    {responsibilitySuggestions.map((suggestion, i) => (
                       <SuggestionCard
                         key={i}
                         suggestion={suggestion}
                         onAdd={() => {
-                          addWorkAchievement(exp.id, suggestion)
-                          setAchievementSuggestions((prev) => prev.filter((s) => s !== suggestion))
+                          addWorkResponsibility(exp.id, suggestion)
+                          setResponsibilitySuggestions((prev) => prev.filter((s) => s !== suggestion))
                         }}
                       />
                     ))}
@@ -1342,11 +1358,11 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
 
                 <div className="flex items-center mt-1">
                   <Input
-                    placeholder="Add a new achievement"
+                    placeholder="Add a new responsibility or achievement"
                     className="text-sm"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && e.currentTarget.value) {
-                        addWorkAchievement(exp.id, e.currentTarget.value)
+                        addWorkResponsibility(exp.id, e.currentTarget.value)
                         e.currentTarget.value = ""
                       }
                     }}
@@ -1357,7 +1373,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
                     onClick={(e) => {
                       const input = e.currentTarget.previousElementSibling as HTMLInputElement
                       if (input.value) {
-                        addWorkAchievement(exp.id, input.value)
+                        addWorkResponsibility(exp.id, input.value)
                         input.value = ""
                       }
                     }}
@@ -1516,7 +1532,7 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
     )
   }
 
-  // Render skills and achievements form
+  // Render skills form
   const renderSkillsForm = () => {
     return (
       <div className="space-y-3">
@@ -1583,58 +1599,6 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
                 const input = e.currentTarget.previousElementSibling as HTMLInputElement
                 if (input.value) {
                   addSkill(input.value)
-                  input.value = ""
-                }
-              }}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        <Separator />
-
-        <div className="space-y-2">
-          <Label className="text-sm">Achievements</Label>
-
-          {resumeData.achievements.length > 0 ? (
-            <ul className="space-y-1 list-disc pl-5 text-sm">
-              {resumeData.achievements.map((achievement, i) => (
-                <li key={i} className="flex justify-between items-center group">
-                  <span>{achievement}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeAchievement(achievement)}
-                    className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-muted-foreground">No achievements added yet</p>
-          )}
-
-          <div className="flex items-center mt-1">
-            <Input
-              placeholder="Add a new achievement"
-              className="text-sm"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && e.currentTarget.value) {
-                  addAchievement(e.currentTarget.value)
-                  e.currentTarget.value = ""
-                }
-              }}
-            />
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                const input = e.currentTarget.previousElementSibling as HTMLInputElement
-                if (input.value) {
-                  addAchievement(input.value)
                   input.value = ""
                 }
               }}
@@ -1921,198 +1885,6 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
     )
   }
 
-  // Render placeholder information
-  const renderPlaceholderInfo = () => {
-    return (
-      <div className="bg-muted/50 p-3 rounded-md text-sm space-y-2">
-        <h3 className="font-medium">Placeholder System Guide</h3>
-
-        <div>
-          <p className="text-xs mb-1 font-medium">Personal Information</p>
-          <ul className="text-xs space-y-1 list-disc pl-4">
-            <li>
-              <code>{"{FIRST_NAME}"}</code> - Your first name
-            </li>
-            <li>
-              <code>{"{LAST_NAME}"}</code> - Your last name
-            </li>
-            <li>
-              <code>{"{FULL_NAME}"}</code> - Your complete name
-            </li>
-            <li>
-              <code>{"{TAGLINE}"}</code> - Your professional tagline
-            </li>
-            <li>
-              <code>{"{CITY}"}</code>, <code>{"{COUNTY}"}</code>, <code>{"{POSTCODE}"}</code> - Location details
-            </li>
-            <li>
-              <code>{"{PHONE}"}</code>, <code>{"{EMAIL}"}</code> - Contact information
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <p className="text-xs mb-1 font-medium">Work Experience</p>
-          <ul className="text-xs space-y-1 list-disc pl-4">
-            <li>
-              <code>{"{WORK_EXPERIENCE}"}</code> - All work experiences combined
-            </li>
-            <li>
-              <code>{"{WORK_EXPERIENCE_1}"}</code>, <code>{"{WORK_EXPERIENCE_2}"}</code> - Individual positions
-            </li>
-            <li>
-              <code>{"{JOB_TITLE_1}"}</code>, <code>{"{EMPLOYER_1}"}</code> - Individual fields for position #1
-            </li>
-            <li>
-              <code>{"{WORK_LOCATION_1}"}</code> - Location for position #1
-            </li>
-            <li>
-              <code>{"{WORK_START_DATE_1}"}</code>, <code>{"{WORK_END_DATE_1}"}</code> - Employment dates for position
-              #1
-            </li>
-            <li>
-              <code>{"{WORK_DESCRIPTION_1}"}</code> - Job description for position #1
-            </li>
-            <li>
-              <code>{"{WORK_ACHIEVEMENTS_1}"}</code> - Achievements for position #1
-            </li>
-            <li>
-              Add <code>_2</code>, <code>_3</code>, etc. for additional positions
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <p className="text-xs mb-1 font-medium">Education</p>
-          <ul className="text-xs space-y-1 list-disc pl-4">
-            <li>
-              <code>{"{EDUCATION}"}</code> - All education entries combined
-            </li>
-            <li>
-              <code>{"{EDUCATION_1}"}</code>, <code>{"{EDUCATION_2}"}</code> - Individual education entries
-            </li>
-            <li>
-              <code>{"{INSTITUTION_1}"}</code> - School/university name for education #1
-            </li>
-            <li>
-              <code>{"{EDUCATION_LOCATION_1}"}</code> - Location for education #1
-            </li>
-            <li>
-              <code>{"{DEGREE_1}"}</code> - Degree type for education #1
-            </li>
-            <li>
-              <code>{"{FIELD_OF_STUDY_1}"}</code> - Major/specialization for education #1
-            </li>
-            <li>
-              <code>{"{GRADUATION_DATE_1}"}</code> - Graduation date for education #1
-            </li>
-            <li>
-              <code>{"{EDUCATION_DESCRIPTION_1}"}</code> - Description for education #1
-            </li>
-            <li>
-              Add <code>_2</code>, <code>_3</code>, etc. for additional education entries
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <p className="text-xs mb-1 font-medium">Skills & Achievements</p>
-          <ul className="text-xs space-y-1 list-disc pl-4">
-            <li>
-              <code>{"{SKILLS}"}</code> - All skills combined as a list
-            </li>
-            <li>
-              <code>{"{SKILL_1}"}</code>, <code>{"{SKILL_2}"}</code>, etc. - Individual skills
-            </li>
-            <li>
-              <code>{"{ACHIEVEMENTS}"}</code> - All achievements combined as a list
-            </li>
-            <li>
-              <code>{"{ACHIEVEMENT_1}"}</code>, <code>{"{ACHIEVEMENT_2}"}</code>, etc. - Individual achievements
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <p className="text-xs mb-1 font-medium">References</p>
-          <ul className="text-xs space-y-1 list-disc pl-4">
-            <li>
-              <code>{"{REFERENCES}"}</code> - All references combined
-            </li>
-            <li>
-              <code>{"{REFERENCE_1}"}</code>, <code>{"{REFERENCE_2}"}</code> - Individual reference entries
-            </li>
-            <li>
-              <code>{"{REFERENCE_NAME_1}"}</code> - Name for reference #1
-            </li>
-            <li>
-              <code>{"{REFERENCE_POSITION_1}"}</code> - Job position for reference #1
-            </li>
-            <li>
-              <code>{"{REFERENCE_COMPANY_1}"}</code> - Company for reference #1
-            </li>
-            <li>
-              <code>{"{REFERENCE_PHONE_1}"}</code> - Phone for reference #1
-            </li>
-            <li>
-              <code>{"{REFERENCE_EMAIL_1}"}</code> - Email for reference #1
-            </li>
-            <li>
-              Add <code>_2</code>, <code>_3</code>, etc. for additional references
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <p className="text-xs mb-1 font-medium">Other Sections</p>
-          <ul className="text-xs space-y-1 list-disc pl-4">
-            <li>
-              <code>{"{PROFESSIONAL_SUMMARY}"}</code> - Your professional summary
-            </li>
-            <li>
-              <code>{"{CERTIFICATIONS}"}</code> - Certifications section
-            </li>
-            <li>
-              <code>{"{LANGUAGES}"}</code> - Languages section
-            </li>
-            <li>
-              <code>{"{WEBSITES}"}</code> - Websites, portfolios, profiles section
-            </li>
-            <li>
-              <code>{"{SOFTWARE}"}</code> - Software proficiency section
-            </li>
-            <li>
-              <code>{"{ACCOMPLISHMENTS}"}</code> - Accomplishments section
-            </li>
-            <li>
-              <code>{"{ADDITIONALINFO}"}</code> - Additional information section
-            </li>
-            <li>
-              <code>{"{AFFILIATIONS}"}</code> - Affiliations section
-            </li>
-            <li>
-              <code>{"{INTERESTS}"}</code> - Interests section
-            </li>
-          </ul>
-        </div>
-
-        <div>
-          <p className="text-xs mb-1 font-medium">Tips for Template Creation</p>
-          <ul className="text-xs space-y-1 list-disc pl-4">
-            <li>
-              Use numbered placeholders (e.g., <code>{"{WORK_EXPERIENCE_1}"}</code>) for specific entries
-            </li>
-            <li>
-              Use general placeholders (e.g., <code>{"{SKILLS}"}</code>) for combined sections
-            </li>
-            <li>All placeholders are automatically replaced with appropriate content</li>
-            <li>Unused placeholders are removed from the final document</li>
-          </ul>
-        </div>
-      </div>
-    )
-  }
-
   // Render current section form
   const renderCurrentSectionForm = () => {
     switch (currentSection) {
@@ -2148,24 +1920,6 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
           >
             {sidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={() => setShowPlaceholderInfo(!showPlaceholderInfo)}
-                >
-                  <Info className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="text-xs">Placeholder System Guide</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
         </div>
 
         <div className="flex items-center gap-1">
@@ -2184,12 +1938,22 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={exportToPdf}>
-                  <FileIcon className="h-4 w-4 mr-2" />
+                <DropdownMenuItem onClick={exportToPdf} disabled={!hasPaid}>
+                  {!hasPaid && <Lock className="h-4 w-4 mr-2 text-muted-foreground" />}
+                  {hasPaid ? (
+                    <FileIcon className="h-4 w-4 mr-2" />
+                  ) : (
+                    <span className="text-muted-foreground">Premium Feature</span>
+                  )}
                   Export as PDF
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={exportToWord}>
-                  <FileIcon className="h-4 w-4 mr-2" />
+                <DropdownMenuItem onClick={exportToWord} disabled={!hasPaid}>
+                  {!hasPaid && <Lock className="h-4 w-4 mr-2 text-muted-foreground" />}
+                  {hasPaid ? (
+                    <FileIcon className="h-4 w-4 mr-2" />
+                  ) : (
+                    <span className="text-muted-foreground">Premium Feature</span>
+                  )}
                   Export as Word
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -2206,8 +1970,6 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
           </Button>
         </div>
       </div>
-
-      {showPlaceholderInfo && <div className="mb-2">{renderPlaceholderInfo()}</div>}
 
       <div className="flex-1 flex flex-col">
         {/* Tabs for section navigation - only show if sidebar is not collapsed */}

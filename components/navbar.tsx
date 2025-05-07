@@ -17,9 +17,9 @@ import {
   Menu,
   X,
   User,
+  CreditCard,
 } from "lucide-react"
 import { useState } from "react"
-import { supabase } from "@/lib/supabaseClient"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,20 +33,17 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ModeToggle } from "@/components/mode-toggle"
 import { NotificationBell } from "@/components/notification-bell"
+import { Badge } from "@/components/ui/badge"
 
 export function Navbar() {
-  const { user, profile } = useUser()
+  const { user, profile, loading, signOut } = useUser()
   const pathname = usePathname()
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut()
-      router.push("/login")
-    } catch (error) {
-      console.error("Error signing out:", error)
-    }
+    await signOut()
+    router.push("/login")
   }
 
   // Define main navigation items
@@ -63,11 +60,30 @@ export function Navbar() {
   // Define user dropdown navigation items
   const userNavItems = [
     { name: "Profile", href: "/settings/profile", icon: User },
+    { name: "Billing", href: "/settings/billing", icon: CreditCard },
     { name: "Settings", href: "/settings", icon: Settings },
   ]
 
   // Check if user is authenticated
   const isAuthenticated = !!user
+
+  if (loading) {
+    return (
+      <header className="sticky top-0 z-50 w-full border-b bg-background">
+        <div className="container flex h-16 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-2">
+              <FileText className="h-6 w-6 text-primary" />
+              <span className="font-bold text-xl">CV Chap Chap</span>
+            </Link>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+          </div>
+        </div>
+      </header>
+    )
+  }
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background">
@@ -123,6 +139,11 @@ export function Navbar() {
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">{profile?.full_name || "User"}</p>
                       <p className="text-xs leading-none text-muted-foreground">{user?.email || ""}</p>
+                      {profile?.subscription_tier && profile.subscription_tier !== "free" && (
+                        <Badge variant="outline" className="mt-1 w-fit">
+                          {profile.subscription_tier.charAt(0).toUpperCase() + profile.subscription_tier.slice(1)}
+                        </Badge>
+                      )}
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />

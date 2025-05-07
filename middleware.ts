@@ -5,45 +5,45 @@ import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 export async function middleware(request: NextRequest) {
   try {
     // Create a Supabase client configured to use cookies
-    const supabase = createMiddlewareClient({ req: request, res: NextResponse.next() })
+    const res = NextResponse.next()
+    const supabase = createMiddlewareClient({ req: request, res })
 
-    // Refresh session if expired - required for Server Components
-    await supabase.auth.getSession()
+    // Refresh session if expired
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
 
     // Get the pathname
     const { pathname } = request.nextUrl
 
-    // Check if the pathname starts with /dashboard or /settings
-    if (pathname.startsWith("/dashboard") || pathname.startsWith("/settings")) {
-      // Get the user's session
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession()
+    // Protected routes that require authentication
+    const protectedRoutes = ["/dashboard", "/settings", "/activity"]
 
-      // If there's an error or no session, redirect to login
-      if (error || !session) {
-        // Create a URL for the login page with a redirect back to the current page
-        const redirectUrl = new URL("/login", request.url)
-        redirectUrl.searchParams.set("redirect", pathname)
+    // Check if the current path is a protected route
+    const isProtectedRoute = protectedRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`))
 
-        // Redirect to the login page
-        return NextResponse.redirect(redirectUrl)
-      }
+    // If it's a protected route and there's no session, redirect to login
+    if (isProtectedRoute && !session) {
+      const redirectUrl = new URL("/login", request.url)
+      redirectUrl.searchParams.set("redirect", pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    // If user is logged in and trying to access login/signup pages, redirect to dashboard
+    if (session && (pathname === "/login" || pathname === "/signup")) {
+      return NextResponse.redirect(new URL("/dashboard", request.url))
     }
 
     // Continue with the request
-    return NextResponse.next()
+    return res
   } catch (error) {
     console.error("Middleware error:", error)
-
     // If there's an error, allow the request to continue
-    // This prevents the middleware from blocking access in case of errors
     return NextResponse.next()
   }
 }
 
 // Specify which paths the middleware should run on
 export const config = {
-  matcher: ["/dashboard/:path*", "/settings/:path*", "/api/:path*"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 }

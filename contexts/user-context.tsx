@@ -1,77 +1,72 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
-import { supabase } from "@/lib/supabaseClient"
-import { safeSupabaseQuery } from "@/lib/fetch-utils"
-import type { User } from "@supabase/supabase-js"
-import type { Profile } from "@/lib/supabaseClient"
 
-// Define the context type
+import { createContext, useContext, useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase"
+import type { User } from "@supabase/supabase-js"
+import type { Profile } from "@/lib/supabase"
+
 interface UserContextType {
   user: User | null
   profile: Profile | null
   loading: boolean
   error: Error | null
-  refreshProfile: () => Promise<void>
+  refreshUser: () => Promise<void>
+  signOut: () => Promise<void>
 }
 
-// Create the context with a default value
 const UserContext = createContext<UserContextType>({
   user: null,
   profile: null,
   loading: true,
   error: null,
-  refreshProfile: async () => {},
+  refreshUser: async () => {},
+  signOut: async () => {},
 })
 
-// Custom hook to use the user context
 export const useUser = () => useContext(UserContext)
 
-// Provider component
-export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
-  // Function to fetch user data
   const fetchUserData = async () => {
     try {
       setLoading(true)
       setError(null)
 
       // Get the current session
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession()
+      const { data, error: sessionError } = await supabase.auth.getSession()
 
       if (sessionError) {
         throw new Error(`Error fetching session: ${sessionError.message}`)
       }
 
-      if (!session) {
-        // No session, so no user is logged in
+      if (!data.session) {
         setUser(null)
         setProfile(null)
         return
       }
 
       // Set the user from the session
-      setUser(session.user)
+      setUser(data.session.user)
 
       // Fetch the user's profile
-      if (session.user) {
+      if (data.session.user) {
         try {
-          const profile = await safeSupabaseQuery(() =>
-            supabase.from("profiles").select("*").eq("id", session.user.id).single(),
-          )
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", data.session.user.id)
+            .single()
 
-          setProfile(profile)
+          if (profileError) throw profileError
+          setProfile(profileData)
         } catch (profileError) {
           console.error("Error fetching profile:", profileError)
-          // Don't throw here, we still have the user
           setProfile(null)
         }
       }
@@ -83,25 +78,20 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  // Function to refresh the profile
-  const refreshProfile = async () => {
-    if (!user) return
+  const refreshUser = async () => {
+    await fetchUserData()
+  }
 
+  const signOut = async () => {
     try {
-      setLoading(true)
-
-      const profile = await safeSupabaseQuery(() => supabase.from("profiles").select("*").eq("id", user.id).single())
-
-      setProfile(profile)
+      await supabase.auth.signOut()
+      setUser(null)
+      setProfile(null)
     } catch (error) {
-      console.error("Error refreshing profile:", error)
-      setError(error instanceof Error ? error : new Error("Unknown error refreshing profile"))
-    } finally {
-      setLoading(false)
+      console.error("Error signing out:", error)
     }
   }
 
-  // Set up auth state listener
   useEffect(() => {
     fetchUserData()
 
@@ -111,7 +101,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setUser(session.user)
-        refreshProfile()
+        // Fetch profile when auth state changes
+        supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single()
+          .then(({ data }) => {
+            setProfile(data)
+          })
+          .catch((error) => {
+            console.error("Error fetching profile on auth change:", error)
+          })
       } else {
         setUser(null)
         setProfile(null)
@@ -124,14 +125,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [])
 
-  // Provide the context value
-  const value = {
-    user,
-    profile,
-    loading,
-    error,
-    refreshProfile,
-  }
-
-  return <UserContext.Provider value={value}>{children}</UserContext.Provider>
+  return (
+    <UserContext.Provider value={{ user, profile, loading, error, refreshUser, signOut }}>
+      {children}
+    </UserContext.Provider>
+  )
 }

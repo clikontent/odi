@@ -550,7 +550,7 @@ export interface Database {
         }
       }
       jobs: {
-         Row: {
+        Row: {
           id: string
           company_id: string
           title: string
