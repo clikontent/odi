@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useUser } from "@/contexts/user-context"
-import { supabase } from "@/lib/supabaseClient"
+import { supabase } from "@/lib/supabase"
 import type { UserActivity } from "@/types/user"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
@@ -28,9 +28,7 @@ import {
   Eye,
   Plus,
   Clock,
-  Loader2,
 } from "lucide-react"
-import { toast } from "@/components/ui/use-toast"
 
 export default function ActivityPage() {
   const { user } = useUser()
@@ -48,59 +46,23 @@ export default function ActivityPage() {
 
   useEffect(() => {
     async function fetchActivities() {
-      if (!user) return
-
       try {
-        setLoading(true)
-        console.log("Fetching activities for user:", user.id)
+        if (!user) return
 
-        // Try to fetch from activity_logs table
-        const { data: activityData, error: activityError } = await supabase
+        setLoading(true)
+
+        const { data, error } = await supabase
           .from("activity_logs")
           .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(100)
 
-        if (activityError) {
-          console.error("Error fetching from activity_logs:", activityError)
+        if (error) throw error
 
-          // If that fails, try analytics_events as fallback
-          const { data: analyticsData, error: analyticsError } = await supabase
-            .from("analytics_events")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
-            .limit(100)
-
-          if (analyticsError) {
-            console.error("Error fetching from analytics_events:", analyticsError)
-            throw new Error("Failed to fetch activity data")
-          }
-
-          // Transform analytics data to activity format
-          const transformedData = analyticsData.map((event) => ({
-            id: event.id,
-            user_id: event.user_id,
-            entity_type: event.event_type.split("_")[0] || "unknown",
-            action: event.event_type.split("_")[1] || "action",
-            entity_id: event.event_data?.entity_id || null,
-            details: event.event_data || {},
-            created_at: event.created_at,
-          }))
-
-          setActivities(transformedData as UserActivity[])
-        } else {
-          console.log("Fetched activities:", activityData)
-          setActivities(activityData as UserActivity[])
-        }
+        setActivities(data as UserActivity[])
       } catch (error) {
         console.error("Error fetching activities:", error)
-        toast({
-          title: "Error",
-          description: "Failed to load activity data. Please try again.",
-          variant: "destructive",
-        })
       } finally {
         setLoading(false)
       }
@@ -108,67 +70,6 @@ export default function ActivityPage() {
 
     fetchActivities()
   }, [user])
-
-  // If no activities are found, generate sample activities for better UX
-  useEffect(() => {
-    if (!loading && activities.length === 0 && user) {
-      console.log("No activities found, generating sample activities")
-
-      // Generate sample activities with timestamps spread over the last week
-      const now = Date.now()
-      const day = 24 * 60 * 60 * 1000
-
-      const sampleActivities: UserActivity[] = [
-        {
-          id: "sample-1",
-          user_id: user.id,
-          entity_type: "resume",
-          action: "create",
-          entity_id: "sample-resume-1",
-          details: { title: "My Professional Resume" },
-          created_at: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        },
-        {
-          id: "sample-2",
-          user_id: user.id,
-          entity_type: "cover_letter",
-          action: "create",
-          entity_id: "sample-cover-letter-1",
-          details: { title: "Application for Software Developer" },
-          created_at: new Date(now - 1 * day).toISOString(), // 1 day ago
-        },
-        {
-          id: "sample-3",
-          user_id: user.id,
-          entity_type: "job_application",
-          action: "create",
-          entity_id: "sample-job-1",
-          details: { job_title: "Frontend Developer at Tech Co" },
-          created_at: new Date(now - 2 * day).toISOString(), // 2 days ago
-        },
-        {
-          id: "sample-4",
-          user_id: user.id,
-          entity_type: "profile",
-          action: "update",
-          entity_id: null,
-          details: { updated_fields: ["skills", "experience"] },
-          created_at: new Date(now - 3 * day).toISOString(), // 3 days ago
-        },
-        {
-          id: "sample-5",
-          user_id: user.id,
-          entity_type: "login",
-          action: "login",
-          entity_id: null,
-          details: { device: "Web Browser" },
-          created_at: new Date(now - 4 * day).toISOString(), // 4 days ago
-        },
-      ]
-
-      setActivities(sampleActivities)
-    }
-  }, [loading, activities, user])
 
   const getActivityIcon = (activity: UserActivity) => {
     const { entity_type, action } = activity
@@ -343,7 +244,7 @@ export default function ActivityPage() {
       <DashboardLayout>
         <div className="container py-8">
           <div className="flex items-center justify-center h-64">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           </div>
         </div>
       </DashboardLayout>

@@ -6,8 +6,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-// Update to use Gemini 2.0 Flash
-const model = google("gemini-2.0-flash", {
+const model = google("gemini-1.5-pro-latest", {
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 })
 
@@ -161,11 +160,7 @@ export async function analyzeResumeForJobMatch(
   }
 }
 
-export async function generateInterviewQuestions(
-  jobTitle: string,
-  jobDescription: string,
-  userId?: string,
-): Promise<string[]> {
+export async function generateInterviewQuestions(jobTitle: string, jobDescription: string, userId?: string): Promise<string[]> {
   try {
     const prompt = `
     Generate 5 likely interview questions and answers for a ${jobTitle} position based on this job description:
@@ -190,6 +185,7 @@ export async function generateInterviewQuestions(
   }
 }
 
+// ✅ Updated: trackAIUsage uses named parameters
 export async function trackAIUsage({
   feature,
   tokensUsed,
@@ -211,7 +207,6 @@ export async function trackAIUsage({
       user_id: String(userId),
       feature_name: String(feature),
       tokens_used: Number(tokensUsed),
-      model_used: "gemini-2.0-flash", // Update model name
     })
 
     if (error) throw error

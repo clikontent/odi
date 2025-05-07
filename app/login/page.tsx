@@ -108,7 +108,7 @@ export default function LoginPage() {
       <div className="grid w-full max-w-[1200px] grid-cols-1 md:grid-cols-2 gap-8 p-4 md:p-8">
         <div className="flex flex-col justify-center space-y-6 rounded-lg bg-primary/5 p-8">
           <div>
-            <h1 className="text-3xl font-bold">CV Chap Chap</h1>
+            <h1 className="text-3xl font-bold">ResumeAI</h1>
             <p className="text-xl text-muted-foreground mt-2">Build your career with AI-powered tools</p>
           </div>
           <blockquote className="border-l-4 border-primary pl-4 italic">
@@ -222,11 +222,6 @@ export default function LoginPage() {
                   <span className="text-sm text-muted-foreground">Don&apos;t have an account? </span>
                   <Link href="/signup" className="text-sm text-primary underline-offset-4 hover:underline">
                     Sign up
-                  </Link>
-                </div>
-                <div className="text-center">
-                  <Link href="/pricing" className="text-sm text-primary underline-offset-4 hover:underline">
-                    View our pricing plans
                   </Link>
                 </div>
               </div>

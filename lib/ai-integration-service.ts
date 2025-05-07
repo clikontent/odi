@@ -1,13 +1,110 @@
+import type { JobDetails, AtsAnalysisResult, InterviewQuestion, CoverLetterData, ResumeData } from "@/types/ai-tools"
 import { supabase } from "@/lib/supabaseClient"
 
-// Function to generate a cover letter using the API
+/**
+ * Analyzes a cover letter against a job description using ATS criteria
+ */
+export async function analyzeCoverLetterAts(
+  coverLetterText: string,
+  jobDescription: string,
+): Promise<AtsAnalysisResult> {
+  try {
+    const response = await fetch("/api/analyze-cover-letter", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        coverLetterText,
+        jobDescription,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || "Failed to analyze cover letter")
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("Error analyzing cover letter:", error)
+    throw error
+  }
+}
+
+/**
+ * Analyzes a resume against a job description using ATS criteria
+ */
+export async function analyzeResumeAts(resumeText: string, jobDescription: string): Promise<AtsAnalysisResult> {
+  try {
+    const response = await fetch("/api/analyze-resume", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        resumeText,
+        jobDescription,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || "Failed to analyze resume")
+    }
+
+    return await response.json()
+  } catch (error) {
+    console.error("Error analyzing resume:", error)
+    throw error
+  }
+}
+
+/**
+ * Generates interview questions based on job details, cover letter, and resume
+ */
+export async function generateInterviewQuestions(
+  jobTitle: string,
+  jobDescription: string,
+  coverLetterText?: string,
+  resumeText?: string,
+): Promise<InterviewQuestion[]> {
+  try {
+    const response = await fetch("/api/generate-interview-questions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        jobTitle,
+        jobDescription,
+        coverLetterText,
+        resumeText,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.error || "Failed to generate interview questions")
+    }
+
+    const data = await response.json()
+    return data.questions
+  } catch (error) {
+    console.error("Error generating interview questions:", error)
+    throw error
+  }
+}
+
+/**
+ * Generates a cover letter based on job details and personal info
+ */
 export async function generateCoverLetter(
   jobTitle: string,
   companyName: string,
   jobDescription: string,
   relevantExperience: string,
   skills: string[],
-  userId?: string,
 ): Promise<string> {
   try {
     const response = await fetch("/api/generate-cover-letter", {
@@ -30,17 +127,6 @@ export async function generateCoverLetter(
     }
 
     const data = await response.json()
-
-    // Log AI usage if userId is provided
-    if (userId) {
-      await trackAIUsage({
-        userId,
-        feature: "cover_letter_generation",
-        tokensUsed: estimateTokens(data.coverLetter),
-        modelUsed: "gemini-2.0-flash",
-      })
-    }
-
     return data.coverLetter
   } catch (error) {
     console.error("Error generating cover letter:", error)
@@ -48,147 +134,103 @@ export async function generateCoverLetter(
   }
 }
 
-// Function to analyze a resume for ATS compatibility
-export async function analyzeResumeForATS(
-  resumeText: string,
-  jobDescription: string,
-  userId?: string,
-): Promise<AtsAnalysisResult> {
+/**
+ * Fetches saved cover letters for a user
+ */
+export async function fetchUserCoverLetters(userId: string): Promise<CoverLetterData[]> {
   try {
-    const response = await fetch("/api/analyze-resume", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        resumeText,
-        jobDescription,
-      }),
-    })
+    const { data, error } = await supabase
+      .from("cover_letters")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || "Failed to analyze resume")
-    }
-
-    const data = await response.json()
-
-    // Log AI usage if userId is provided
-    if (userId) {
-      await trackAIUsage({
-        userId,
-        feature: "resume_ats_analysis",
-        tokensUsed: estimateTokens(resumeText) + estimateTokens(jobDescription),
-        modelUsed: "gemini-2.0-flash",
-      })
-    }
-
-    return data.analysis
+    if (error) throw error
+    return data || []
   } catch (error) {
-    console.error("Error analyzing resume:", error)
+    console.error("Error fetching cover letters:", error)
     throw error
   }
 }
 
-// Function to generate interview questions
-export async function generateInterviewQuestions(
-  jobTitle: string,
-  jobDescription: string,
-  resumeText?: string,
-  coverLetterText?: string,
-  userId?: string,
-): Promise<InterviewQuestion[]> {
+/**
+ * Fetches saved resumes for a user
+ */
+export async function fetchUserResumes(userId: string): Promise<ResumeData[]> {
   try {
-    const response = await fetch("/api/generate-interview-questions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        jobTitle,
-        jobDescription,
-        resumeText,
-        coverLetterText,
-      }),
-    })
+    const { data, error } = await supabase
+      .from("resumes")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}))
-      throw new Error(errorData.error || "Failed to generate interview questions")
-    }
-
-    const data = await response.json()
-
-    // Log AI usage if userId is provided
-    if (userId) {
-      await trackAIUsage({
-        userId,
-        feature: "interview_question_generation",
-        tokensUsed:
-          estimateTokens(jobDescription) +
-          (resumeText ? estimateTokens(resumeText) : 0) +
-          (coverLetterText ? estimateTokens(coverLetterText) : 0),
-        modelUsed: "gemini-2.0-flash",
-      })
-    }
-
-    return data.questions
+    if (error) throw error
+    return data || []
   } catch (error) {
-    console.error("Error generating interview questions:", error)
+    console.error("Error fetching resumes:", error)
     throw error
   }
 }
 
-// Function to track AI usage
-interface TrackAIUsageParams {
-  userId: string
-  feature: string
-  tokensUsed: number
-  modelUsed: string
-}
-
-export async function trackAIUsage({
-  userId,
-  feature,
-  tokensUsed,
-  modelUsed = "gemini-2.0-flash",
-}: TrackAIUsageParams): Promise<void> {
+/**
+ * Creates a comprehensive interview preparation package based on job details, cover letter, and resume
+ */
+export async function createInterviewPrepPackage(
+  jobDetails: JobDetails,
+  coverLetterId?: string,
+  resumeId?: string,
+): Promise<{
+  questions: InterviewQuestion[]
+  jobInsights: string[]
+  companyInsights: string[]
+}> {
   try {
-    const { error } = await supabase.from("ai_usage").insert({
-      user_id: userId,
-      feature_name: feature,
-      tokens_used: tokensUsed,
-      model_used: modelUsed,
-      timestamp: new Date().toISOString(),
-    })
+    // Fetch cover letter and resume if IDs are provided
+    let coverLetterText = ""
+    let resumeText = ""
 
-    if (error) {
-      console.error("Error tracking AI usage:", error)
+    if (coverLetterId) {
+      const { data, error } = await supabase.from("cover_letters").select("content").eq("id", coverLetterId).single()
+
+      if (!error && data) {
+        coverLetterText = data.content.generatedText || ""
+      }
+    }
+
+    if (resumeId) {
+      const { data, error } = await supabase.from("resumes").select("content").eq("id", resumeId).single()
+
+      if (!error && data) {
+        // This assumes resume content has a text representation
+        resumeText = data.content.fullText || ""
+      }
+    }
+
+    // Generate interview questions
+    const questions = await generateInterviewQuestions(
+      jobDetails.jobTitle,
+      jobDetails.jobDescription,
+      coverLetterText,
+      resumeText,
+    )
+
+    // For now, return placeholder insights
+    // In a real implementation, you would generate these with AI as well
+    return {
+      questions,
+      jobInsights: [
+        "Research the company culture and values",
+        "Understand the industry trends affecting this role",
+        "Prepare examples of your relevant experience",
+      ],
+      companyInsights: [
+        "Review the company website and recent news",
+        "Check their social media presence",
+        "Research their competitors",
+      ],
     }
   } catch (error) {
-    console.error("Error tracking AI usage:", error)
+    console.error("Error creating interview prep package:", error)
+    throw error
   }
-}
-
-// Helper function to estimate tokens in a text
-function estimateTokens(text: string): number {
-  if (!text) return 0
-  // A rough estimate: 1 token ≈ 4 characters
-  return Math.ceil(text.length / 4)
-}
-
-// Types
-export interface AtsAnalysisResult {
-  score: number
-  missingKeywords: string[]
-  suggestions: string[]
-  formattingIssues?: string[]
-}
-
-export interface InterviewQuestion {
-  question: string
-  context?: string
-  difficulty?: "easy" | "medium" | "hard"
-  category?: string
-  suggestedAnswer?: string
 }

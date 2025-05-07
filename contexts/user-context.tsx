@@ -1,72 +1,77 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { supabase } from "@/lib/supabaseClient"
+import { safeSupabaseQuery } from "@/lib/fetch-utils"
 import type { User } from "@supabase/supabase-js"
-import type { Profile } from "@/lib/supabase"
+import type { Profile } from "@/lib/supabaseClient"
 
+// Define the context type
 interface UserContextType {
   user: User | null
   profile: Profile | null
   loading: boolean
   error: Error | null
-  refreshUser: () => Promise<void>
-  signOut: () => Promise<void>
+  refreshProfile: () => Promise<void>
 }
 
+// Create the context with a default value
 const UserContext = createContext<UserContextType>({
   user: null,
   profile: null,
   loading: true,
   error: null,
-  refreshUser: async () => {},
-  signOut: async () => {},
+  refreshProfile: async () => {},
 })
 
+// Custom hook to use the user context
 export const useUser = () => useContext(UserContext)
 
-export const UserProvider = ({ children }: { children: React.ReactNode }) => {
+// Provider component
+export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
+  // Function to fetch user data
   const fetchUserData = async () => {
     try {
       setLoading(true)
       setError(null)
 
       // Get the current session
-      const { data, error: sessionError } = await supabase.auth.getSession()
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession()
 
       if (sessionError) {
         throw new Error(`Error fetching session: ${sessionError.message}`)
       }
 
-      if (!data.session) {
+      if (!session) {
+        // No session, so no user is logged in
         setUser(null)
         setProfile(null)
         return
       }
 
       // Set the user from the session
-      setUser(data.session.user)
+      setUser(session.user)
 
       // Fetch the user's profile
-      if (data.session.user) {
+      if (session.user) {
         try {
-          const { data: profileData, error: profileError } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", data.session.user.id)
-            .single()
+          const profile = await safeSupabaseQuery(() =>
+            supabase.from("profiles").select("*").eq("id", session.user.id).single(),
+          )
 
-          if (profileError) throw profileError
-          setProfile(profileData)
+          setProfile(profile)
         } catch (profileError) {
           console.error("Error fetching profile:", profileError)
+          // Don't throw here, we still have the user
           setProfile(null)
         }
       }
@@ -78,20 +83,25 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }
 
-  const refreshUser = async () => {
-    await fetchUserData()
-  }
+  // Function to refresh the profile
+  const refreshProfile = async () => {
+    if (!user) return
 
-  const signOut = async () => {
     try {
-      await supabase.auth.signOut()
-      setUser(null)
-      setProfile(null)
+      setLoading(true)
+
+      const profile = await safeSupabaseQuery(() => supabase.from("profiles").select("*").eq("id", user.id).single())
+
+      setProfile(profile)
     } catch (error) {
-      console.error("Error signing out:", error)
+      console.error("Error refreshing profile:", error)
+      setError(error instanceof Error ? error : new Error("Unknown error refreshing profile"))
+    } finally {
+      setLoading(false)
     }
   }
 
+  // Set up auth state listener
   useEffect(() => {
     fetchUserData()
 
@@ -101,18 +111,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         setUser(session.user)
-        // Fetch profile when auth state changes
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", session.user.id)
-          .single()
-          .then(({ data }) => {
-            setProfile(data)
-          })
-          .catch((error) => {
-            console.error("Error fetching profile on auth change:", error)
-          })
+        refreshProfile()
       } else {
         setUser(null)
         setProfile(null)
@@ -125,9 +124,14 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [])
 
-  return (
-    <UserContext.Provider value={{ user, profile, loading, error, refreshUser, signOut }}>
-      {children}
-    </UserContext.Provider>
-  )
+  // Provide the context value
+  const value = {
+    user,
+    profile,
+    loading,
+    error,
+    refreshProfile,
+  }
+
+  return <UserContext.Provider value={value}>{children}</UserContext.Provider>
 }

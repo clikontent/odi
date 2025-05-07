@@ -59,8 +59,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to initialize AI service" }, { status: 500 })
     }
 
-    // Use Gemini 2.0 Flash for faster responses
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" })
 
     console.log("Sending prompt to Gemini API...")
 

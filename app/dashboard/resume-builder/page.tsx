@@ -9,12 +9,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react"
-import { supabase } from "@/lib/supabaseClient"
+import { supabase } from "@/lib/supabase"
 import { getResumeTemplates, getResumeTemplateById } from "@/lib/templates"
 import type { ResumeTemplate } from "@/lib/supabase"
 import ErrorBoundary from "@/components/error-boundary"
 import { toast } from "@/components/ui/use-toast"
-import { useUser } from "@/contexts/user-context"
 
 // Dynamically import the resume builders with no SSR
 const PlaceholderResumeBuilder = dynamic(() => import("@/components/placeholder-resume-builder"), {
@@ -30,7 +29,6 @@ export default function ResumeBuilder() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const templateId = searchParams.get("template")
-  const { user } = useUser()
 
   const [step, setStep] = useState<"template" | "edit" | "preview" | "checkout">("template")
   const [resumeTitle, setResumeTitle] = useState("My Resume")
@@ -61,13 +59,10 @@ export default function ResumeBuilder() {
   useEffect(() => {
     async function fetchTemplates() {
       try {
-        if (user) {
-          setUserId(user.id)
-        } else {
-          const { data } = await supabase.auth.getUser()
-          if (data?.user) {
-            setUserId(data.user.id)
-          }
+        const { data } = await supabase.auth.getUser()
+
+        if (data?.user) {
+          setUserId(data.user.id)
         }
 
         const templates = await getResumeTemplates()
@@ -93,7 +88,7 @@ export default function ResumeBuilder() {
     }
 
     fetchTemplates()
-  }, [selectedTemplateId, user])
+  }, [selectedTemplateId])
 
   useEffect(() => {
     async function fetchSelectedTemplate() {
@@ -162,14 +157,6 @@ export default function ResumeBuilder() {
         throw error
       }
 
-      // Log activity
-      await supabase.from("activity_logs").insert({
-        user_id: userId,
-        entity_type: "resume",
-        action: "create",
-        details: { title: resumeTitle },
-      })
-
       setHasSaved(true)
       toast({
         title: "Success",
@@ -212,7 +199,7 @@ export default function ResumeBuilder() {
                   <div className="relative aspect-[3/4] bg-muted">
                     {template.thumbnail_url ? (
                       <img
-                        src={template.thumbnail_url || "/placeholder.svg?height=400&width=300"}
+                        src={template.thumbnail_url || "/placeholder.svg"}
                         alt={template.name}
                         className="w-full h-full object-cover"
                       />
