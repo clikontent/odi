@@ -1259,6 +1259,8 @@ const PlaceholderResumeBuilder = ({ templateHtml, templateCss, onSave }: Placeho
                     value={exp.endDate}
                     onChange={(e) =>
                       setResumeData((prev) => ({
+                        ...prev,\
+                        workExperiences: prev.work  => ({
                         ...prev,
                         workExperiences: prev.workExperiences.map((item) =>
                           item.id === exp.id ? { ...item, endDate: e.target.value } : item,
