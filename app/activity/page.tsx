@@ -48,12 +48,13 @@ export default function ActivityPage() {
 
   useEffect(() => {
     async function fetchActivities() {
+      if (!user) return
+
       try {
-        if (!user) return
-
         setLoading(true)
+        console.log("Fetching activities for user:", user.id)
 
-        // First, try to get activity logs
+        // Try to fetch from activity_logs table
         const { data: activityData, error: activityError } = await supabase
           .from("activity_logs")
           .select("*")
@@ -62,9 +63,9 @@ export default function ActivityPage() {
           .limit(100)
 
         if (activityError) {
-          console.error("Error fetching activities from activity_logs:", activityError)
+          console.error("Error fetching from activity_logs:", activityError)
 
-          // If that fails, try the analytics_events table as fallback
+          // If that fails, try analytics_events as fallback
           const { data: analyticsData, error: analyticsError } = await supabase
             .from("analytics_events")
             .select("*")
@@ -73,11 +74,11 @@ export default function ActivityPage() {
             .limit(100)
 
           if (analyticsError) {
-            console.error("Error fetching activities from analytics_events:", analyticsError)
+            console.error("Error fetching from analytics_events:", analyticsError)
             throw new Error("Failed to fetch activity data")
           }
 
-          // Transform analytics events to activity format
+          // Transform analytics data to activity format
           const transformedData = analyticsData.map((event) => ({
             id: event.id,
             user_id: event.user_id,
@@ -90,6 +91,7 @@ export default function ActivityPage() {
 
           setActivities(transformedData as UserActivity[])
         } else {
+          console.log("Fetched activities:", activityData)
           setActivities(activityData as UserActivity[])
         }
       } catch (error) {
@@ -107,9 +109,15 @@ export default function ActivityPage() {
     fetchActivities()
   }, [user])
 
-  // If no activities are found, generate some sample activities for better UX
+  // If no activities are found, generate sample activities for better UX
   useEffect(() => {
     if (!loading && activities.length === 0 && user) {
+      console.log("No activities found, generating sample activities")
+
+      // Generate sample activities with timestamps spread over the last week
+      const now = Date.now()
+      const day = 24 * 60 * 60 * 1000
+
       const sampleActivities: UserActivity[] = [
         {
           id: "sample-1",
@@ -118,7 +126,7 @@ export default function ActivityPage() {
           action: "create",
           entity_id: "sample-resume-1",
           details: { title: "My Professional Resume" },
-          created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+          created_at: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
         },
         {
           id: "sample-2",
@@ -127,7 +135,7 @@ export default function ActivityPage() {
           action: "create",
           entity_id: "sample-cover-letter-1",
           details: { title: "Application for Software Developer" },
-          created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+          created_at: new Date(now - 1 * day).toISOString(), // 1 day ago
         },
         {
           id: "sample-3",
@@ -136,7 +144,7 @@ export default function ActivityPage() {
           action: "create",
           entity_id: "sample-job-1",
           details: { job_title: "Frontend Developer at Tech Co" },
-          created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
+          created_at: new Date(now - 2 * day).toISOString(), // 2 days ago
         },
         {
           id: "sample-4",
@@ -145,7 +153,7 @@ export default function ActivityPage() {
           action: "update",
           entity_id: null,
           details: { updated_fields: ["skills", "experience"] },
-          created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+          created_at: new Date(now - 3 * day).toISOString(), // 3 days ago
         },
         {
           id: "sample-5",
@@ -154,7 +162,7 @@ export default function ActivityPage() {
           action: "login",
           entity_id: null,
           details: { device: "Web Browser" },
-          created_at: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(), // 4 days ago
+          created_at: new Date(now - 4 * day).toISOString(), // 4 days ago
         },
       ]
 

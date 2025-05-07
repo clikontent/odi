@@ -10,16 +10,15 @@ import {
   PenTool,
   Briefcase,
   FileCheck,
-  BarChart,
-  Users,
+  MessageSquare,
+  Activity,
   Settings,
-  Shield,
   LogOut,
   Menu,
   X,
-  UserIcon,
+  User,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { supabase } from "@/lib/supabaseClient"
 import {
   DropdownMenu,
@@ -31,115 +30,49 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ModeToggle } from "@/components/mode-toggle"
 import { NotificationBell } from "@/components/notification-bell"
 
 export function Navbar() {
-  const { user, isLoading, signOut } = useUser()
+  const { user, profile } = useUser()
   const pathname = usePathname()
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [authChecked, setAuthChecked] = useState(false)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [userRole, setUserRole] = useState("regular")
 
-  // Check authentication status directly from Supabase
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data } = await supabase.auth.getSession()
-      setIsAuthenticated(!!data.session)
-      setAuthChecked(true)
-
-      if (data.session) {
-        // Get user profile
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", data.session.user.id)
-          .single()
-
-        if (profileData) {
-          const isCorporate = profileData.subscription_tier === "corporate"
-          const isAdmin = profileData.email?.includes("admin")
-
-          if (isAdmin) {
-            setUserRole("admin")
-          } else if (isCorporate) {
-            setUserRole("corporate")
-          } else {
-            setUserRole("regular")
-          }
-        }
-      }
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut()
+      router.push("/login")
+    } catch (error) {
+      console.error("Error signing out:", error)
     }
+  }
 
-    checkAuth()
-  }, [])
-
-  // Define navigation items based on user role
-  const regularNavItems = [
+  // Define main navigation items
+  const mainNavItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Resume Builder", href: "/dashboard/resume-templates", icon: FileText },
+    { name: "Resume Builder", href: "/dashboard/resume-builder", icon: FileText },
     { name: "Cover Letters", href: "/dashboard/cover-letters", icon: PenTool },
     { name: "Job Board", href: "/dashboard/job-board", icon: Briefcase },
     { name: "ATS Optimizer", href: "/dashboard/ats-optimizer", icon: FileCheck },
-    { name: "Interview Prep", href: "/dashboard/interview-prep", icon: Users },
-    { name: "Activity", href: "/activity", icon: BarChart },
+    { name: "Interview Prep", href: "/dashboard/interview-prep", icon: MessageSquare },
+    { name: "Activity", href: "/activity", icon: Activity },
   ]
 
-  const corporateNavItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Corporate Dashboard", href: "/corporate/dashboard", icon: Briefcase },
-    { name: "Job Postings", href: "/corporate/dashboard", icon: FileText },
-    { name: "Candidates", href: "/corporate/dashboard", icon: Users },
-    { name: "Analytics", href: "/corporate/dashboard", icon: BarChart },
+  // Define user dropdown navigation items
+  const userNavItems = [
+    { name: "Profile", href: "/settings/profile", icon: User },
+    { name: "Settings", href: "/settings", icon: Settings },
   ]
 
-  const adminNavItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Admin Panel", href: "/admin", icon: Shield },
-    { name: "Resume Builder", href: "/dashboard/resume-templates", icon: FileText },
-    { name: "Cover Letters", href: "/dashboard/cover-letters", icon: PenTool },
-    { name: "Job Board", href: "/dashboard/job-board", icon: Briefcase },
-    { name: "User Management", href: "/admin", icon: Users },
-  ]
-
-  // Select navigation items based on user role
-  const navItems = userRole === "admin" ? adminNavItems : userRole === "corporate" ? corporateNavItems : regularNavItems
-
-  const userNavigation = [
-    { name: "Your Profile", href: "/settings/profile", icon: UserIcon },
-    { name: "Settings", href: "/settings/profile", icon: Settings },
-  ]
-
-  const handleSignOut = async () => {
-    await signOut()
-    router.push("/")
-  }
-
-  if (!authChecked || isLoading) {
-    return (
-      <header className="sticky top-0 z-50 w-full border-b bg-background">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Link href="/" className="flex items-center gap-2">
-              <FileText className="h-6 w-6 text-primary" />
-              <span className="font-bold text-xl">CV Chap Chap</span>
-            </Link>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
-          </div>
-        </div>
-      </header>
-    )
-  }
+  // Check if user is authenticated
+  const isAuthenticated = !!user
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background">
       <div className="container flex h-16 items-center justify-between">
+        {/* Logo */}
         <div className="flex items-center gap-2">
           <Link href={isAuthenticated ? "/dashboard" : "/"} className="flex items-center gap-2">
             <FileText className="h-6 w-6 text-primary" />
@@ -149,8 +82,8 @@ export function Navbar() {
 
         {/* Desktop Navigation */}
         {isAuthenticated && (
-          <nav className="hidden md:flex items-center space-x-1">
-            {navItems.map((item) => (
+          <nav className="hidden md:flex items-center space-x-1 mx-4 flex-1 justify-center">
+            {mainNavItems.map((item) => (
               <Button
                 key={item.name}
                 variant={pathname === item.href || pathname?.startsWith(`${item.href}/`) ? "default" : "ghost"}
@@ -167,81 +100,7 @@ export function Navbar() {
           </nav>
         )}
 
-        {/* Mobile Menu Button */}
-        {isAuthenticated && (
-          <div className="flex md:hidden">
-            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <span className="sr-only">Open main menu</span>
-                  <Menu className="h-6 w-6" aria-hidden="true" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-[250px] sm:max-w-xs">
-                <div className="flex items-center justify-between mb-6">
-                  <Link
-                    href={isAuthenticated ? "/dashboard" : "/"}
-                    className="flex items-center gap-2"
-                    onClick={() => setMobileMenuOpen(false)}
-                  >
-                    <FileText className="h-6 w-6 text-primary" />
-                    <span className="font-bold text-xl">CV Chap Chap</span>
-                  </Link>
-                  <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>
-                    <X className="h-6 w-6" />
-                  </Button>
-                </div>
-                <nav className="flex flex-col space-y-1">
-                  {navItems.map((item) => (
-                    <Button
-                      key={item.name}
-                      variant={pathname === item.href || pathname?.startsWith(`${item.href}/`) ? "default" : "ghost"}
-                      size="sm"
-                      className="justify-start"
-                      asChild
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      <Link href={item.href}>
-                        <item.icon className="mr-2 h-4 w-4" />
-                        {item.name}
-                      </Link>
-                    </Button>
-                  ))}
-                  <div className="pt-4 mt-4 border-t">
-                    {userNavigation.map((item) => (
-                      <Button
-                        key={item.name}
-                        variant="ghost"
-                        size="sm"
-                        className="justify-start w-full"
-                        asChild
-                        onClick={() => setMobileMenuOpen(false)}
-                      >
-                        <Link href={item.href}>
-                          <item.icon className="mr-2 h-4 w-4" />
-                          {item.name}
-                        </Link>
-                      </Button>
-                    ))}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start w-full text-red-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
-                      onClick={() => {
-                        handleSignOut()
-                        setMobileMenuOpen(false)
-                      }}
-                    >
-                      <LogOut className="mr-2 h-4 w-4" />
-                      Log out
-                    </Button>
-                  </div>
-                </nav>
-              </SheetContent>
-            </Sheet>
-          </div>
-        )}
-
+        {/* Right Side Items */}
         <div className="flex items-center gap-2">
           <ModeToggle />
 
@@ -249,30 +108,26 @@ export function Navbar() {
             <>
               <NotificationBell />
 
+              {/* User Menu Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={user?.avatar_url || ""} alt={user?.full_name || ""} />
-                      <AvatarFallback>{user?.full_name?.charAt(0) || user?.email?.charAt(0) || "U"}</AvatarFallback>
+                      <AvatarImage src={profile?.avatar_url || ""} alt={profile?.full_name || ""} />
+                      <AvatarFallback>{profile?.full_name?.charAt(0) || user?.email?.charAt(0) || "U"}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
                     <div className="flex flex-col space-y-1">
-                      <p className="text-sm font-medium leading-none">{user?.full_name || "User"}</p>
+                      <p className="text-sm font-medium leading-none">{profile?.full_name || "User"}</p>
                       <p className="text-xs leading-none text-muted-foreground">{user?.email || ""}</p>
-                      {user?.subscription_tier !== "free" && (
-                        <Badge variant="outline" className="mt-1 w-fit">
-                          {user?.subscription_tier === "admin" ? "Admin" : "Corporate"}
-                        </Badge>
-                      )}
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
-                    {userNavigation.map((item) => (
+                    {userNavItems.map((item) => (
                       <DropdownMenuItem key={item.name} asChild>
                         <Link href={item.href} className="cursor-pointer">
                           <item.icon className="mr-2 h-4 w-4" />
@@ -288,6 +143,81 @@ export function Navbar() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Mobile Menu Button */}
+              <div className="md:hidden">
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <span className="sr-only">Open main menu</span>
+                      <Menu className="h-6 w-6" aria-hidden="true" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-[250px] sm:max-w-xs">
+                    <div className="flex items-center justify-between mb-6">
+                      <Link
+                        href="/dashboard"
+                        className="flex items-center gap-2"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        <FileText className="h-6 w-6 text-primary" />
+                        <span className="font-bold text-xl">CV Chap Chap</span>
+                      </Link>
+                      <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)}>
+                        <X className="h-6 w-6" />
+                      </Button>
+                    </div>
+                    <nav className="flex flex-col space-y-1">
+                      {mainNavItems.map((item) => (
+                        <Button
+                          key={item.name}
+                          variant={
+                            pathname === item.href || pathname?.startsWith(`${item.href}/`) ? "default" : "ghost"
+                          }
+                          size="sm"
+                          className="justify-start"
+                          asChild
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          <Link href={item.href}>
+                            <item.icon className="mr-2 h-4 w-4" />
+                            {item.name}
+                          </Link>
+                        </Button>
+                      ))}
+                      <div className="pt-4 mt-4 border-t">
+                        {userNavItems.map((item) => (
+                          <Button
+                            key={item.name}
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start w-full"
+                            asChild
+                            onClick={() => setMobileMenuOpen(false)}
+                          >
+                            <Link href={item.href}>
+                              <item.icon className="mr-2 h-4 w-4" />
+                              {item.name}
+                            </Link>
+                          </Button>
+                        ))}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="justify-start w-full text-red-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20"
+                          onClick={() => {
+                            handleSignOut()
+                            setMobileMenuOpen(false)
+                          }}
+                        >
+                          <LogOut className="mr-2 h-4 w-4" />
+                          Log out
+                        </Button>
+                      </div>
+                    </nav>
+                  </SheetContent>
+                </Sheet>
+              </div>
             </>
           ) : (
             <>

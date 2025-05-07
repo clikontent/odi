@@ -11,15 +11,14 @@ import {
   PenTool,
   FileCheck,
   Briefcase,
-  BarChart,
   Clock,
   Plus,
   Download,
   Users,
   TrendingUp,
   MessageSquare,
-  Lock,
-  Crown,
+  Loader2,
+  Activity,
 } from "lucide-react"
 import { getActivityTimeline } from "@/lib/analytics"
 import { Progress } from "@/components/ui/progress"
@@ -65,92 +64,87 @@ export default function Dashboard() {
     },
   ])
 
-  // Determine features based on subscription tier
-  const isPremium = user?.subscription_tier === "premium"
-  const isCorporate = user?.subscription_tier === "corporate"
-  const isFree = !isPremium && !isCorporate
-
   useEffect(() => {
     async function fetchData() {
       try {
-        let userResponse
-        try {
-          userResponse = await supabase.auth.getUser()
-        } catch (error) {
-          console.error("Network error fetching user in dashboard:", error)
+        if (!user) {
+          console.log("No user found, waiting for user data...")
           setLoading(false)
           return
         }
 
-        const {
-          data: { user },
-        } = userResponse
+        console.log("Fetching data for user:", user.id)
+        setLoading(true)
 
-        if (user) {
-          // Fetch recent resumes with error handling
-          try {
-            const { data: resumeData, error: resumeError } = await supabase
-              .from("resumes")
-              .select("*")
-              .eq("user_id", user.id)
-              .order("updated_at", { ascending: false })
-              .limit(3)
+        // Fetch recent resumes with error handling
+        try {
+          const { data: resumeData, error: resumeError } = await supabase
+            .from("resumes")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("updated_at", { ascending: false })
+            .limit(3)
 
-            if (resumeError) {
-              console.error("Error fetching resumes:", resumeError)
-            } else {
-              setRecentResumes(resumeData || [])
-            }
-          } catch (error) {
-            console.error("Network error fetching resumes:", error)
-          }
-
-          // Fetch activity timeline with error handling
-          try {
-            const activityData = await getActivityTimeline(user.id, 5)
-            setRecentActivity(activityData || [])
-          } catch (error) {
-            console.error("Error fetching activity timeline:", error)
-          }
-
-          // Fetch stats with error handling
-          try {
-            const { data: resumeCount, error: resumeCountError } = await supabase
-              .from("resumes")
-              .select("id", { count: "exact" })
-              .eq("user_id", user.id)
-
-            if (resumeCountError) {
-              console.error("Error fetching resume count:", resumeCountError)
-            }
-
-            const { data: coverLetterCount, error: coverLetterCountError } = await supabase
-              .from("cover_letters")
-              .select("id", { count: "exact" })
-              .eq("user_id", user.id)
-
-            if (coverLetterCountError) {
-              console.error("Error fetching cover letter count:", coverLetterCountError)
-            }
-
-            const { data: applicationCount, error: applicationCountError } = await supabase
-              .from("job_applications")
-              .select("id", { count: "exact" })
-              .eq("user_id", user.id)
-
-            if (applicationCountError) {
-              console.error("Error fetching application count:", applicationCountError)
-            }
-
-            setStats({
-              totalResumes: resumeCount?.length || 0,
-              totalCoverLetters: coverLetterCount?.length || 0,
-              totalApplications: applicationCount?.length || 0,
-              completionRate: Math.min(100, ((resumeCount?.length || 0) / 5) * 100), // Assuming 5 resumes is "complete"
+          if (resumeError) {
+            console.error("Error fetching resumes:", resumeError)
+            toast({
+              variant: "destructive",
+              title: "Error fetching resumes",
+              description: "Please try refreshing the page.",
             })
-          } catch (error) {
-            console.error("Network error fetching stats:", error)
+          } else {
+            console.log("Fetched resumes:", resumeData)
+            setRecentResumes(resumeData || [])
           }
+        } catch (error) {
+          console.error("Network error fetching resumes:", error)
+        }
+
+        // Fetch activity timeline with error handling
+        try {
+          const activityData = await getActivityTimeline(user.id, 5)
+          setRecentActivity(activityData || [])
+        } catch (error) {
+          console.error("Error fetching activity timeline:", error)
+        }
+
+        // Fetch stats with error handling
+        try {
+          const { data: resumeCount, error: resumeCountError } = await supabase
+            .from("resumes")
+            .select("id", { count: "exact" })
+            .eq("user_id", user.id)
+
+          if (resumeCountError) {
+            console.error("Error fetching resume count:", resumeCountError)
+          }
+
+          const { data: coverLetterCount, error: coverLetterCountError } = await supabase
+            .from("cover_letters")
+            .select("id", { count: "exact" })
+            .eq("user_id", user.id)
+
+          if (coverLetterCountError) {
+            console.error("Error fetching cover letter count:", coverLetterCountError)
+          }
+
+          const { data: applicationCount, error: applicationCountError } = await supabase
+            .from("job_applications")
+            .select("id", { count: "exact" })
+            .eq("user_id", user.id)
+
+          if (applicationCountError) {
+            console.error("Error fetching application count:", applicationCountError)
+          }
+
+          setStats({
+            totalResumes: resumeCount?.length || 0,
+            totalCoverLetters: coverLetterCount?.length || 0,
+            totalApplications: applicationCount?.length || 0,
+            completionRate: Math.min(100, ((resumeCount?.length || 0) / 5) * 100), // Assuming 5 resumes is "complete"
+          })
+        } catch (error) {
+          console.error("Network error fetching stats:", error)
         }
       } catch (error) {
         console.error("Error in dashboard fetchData:", error)
@@ -160,89 +154,7 @@ export default function Dashboard() {
     }
 
     fetchData()
-  }, [])
-
-  // Define features based on subscription tier
-  const features = [
-    {
-      title: "Resume Builder",
-      description: "Create ATS-optimized resumes with our AI-powered builder",
-      icon: FileText,
-      href: "/dashboard/resume-templates",
-      color: "bg-blue-500/10 text-blue-500",
-      locked: false,
-    },
-    {
-      title: "Cover Letter Generator",
-      description: isFree
-        ? "5 free AI-generated cover letters (one-time)"
-        : "Generate unlimited tailored cover letters",
-      icon: PenTool,
-      href: "/dashboard/cover-letters",
-      color: "bg-green-500/10 text-green-500",
-      locked: false,
-    },
-    {
-      title: "ATS Optimizer",
-      description: isFree
-        ? "Basic ATS score without detailed fixes"
-        : "Full ATS optimization with detailed recommendations",
-      icon: FileCheck,
-      href: "/dashboard/ats-optimizer",
-      color: "bg-purple-500/10 text-purple-500",
-      locked: false,
-    },
-    {
-      title: "Job Board",
-      description: isFree ? "Browse jobs in read-only mode" : "Save jobs, get alerts, and apply directly",
-      icon: Briefcase,
-      href: "/dashboard/job-board",
-      color: "bg-orange-500/10 text-orange-500",
-      locked: false,
-    },
-    {
-      title: "CV Assessment",
-      description: "Get your CV scored and receive improvement suggestions",
-      icon: BarChart,
-      href: "/dashboard/cv-assessment",
-      color: "bg-pink-500/10 text-pink-500",
-      locked: !isPremium && !isCorporate,
-      premium: true,
-    },
-    {
-      title: isPremium || isCorporate ? "AI Interview Prep" : "Recent Activity",
-      description:
-        isPremium || isCorporate
-          ? "Practice interviews with AI-generated questions"
-          : "View your recent applications and activity",
-      icon: isPremium || isCorporate ? MessageSquare : Clock,
-      href: isPremium || isCorporate ? "/dashboard/interview-prep" : "/dashboard/activity",
-      color: isPremium || isCorporate ? "bg-indigo-500/10 text-indigo-500" : "bg-teal-500/10 text-teal-500",
-      locked: false,
-    },
-  ]
-
-  // Add corporate-specific features
-  if (isCorporate) {
-    features.push(
-      {
-        title: "Bulk Hiring Tools",
-        description: "Scan and analyze multiple resumes at once",
-        icon: Users,
-        href: "/dashboard/bulk-hiring",
-        color: "bg-amber-500/10 text-amber-500",
-        locked: false,
-      },
-      {
-        title: "Recruitment Analytics",
-        description: "Advanced analytics and reporting for your hiring process",
-        icon: TrendingUp,
-        href: "/dashboard/recruitment-analytics",
-        color: "bg-cyan-500/10 text-cyan-500",
-        locked: false,
-      },
-    )
-  }
+  }, [user, toast])
 
   // Format date for display
   const formatDate = (dateString) => {
@@ -251,8 +163,6 @@ export default function Dashboard() {
       year: "numeric",
       month: "short",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     })
   }
 
@@ -296,13 +206,6 @@ export default function Dashboard() {
     }
   }
 
-  const handleUpgradeClick = () => {
-    toast({
-      title: "Upgrade your plan",
-      description: "This feature is only available on Premium and Corporate plans.",
-    })
-  }
-
   return (
     <DashboardLayout>
       <div className="container py-8">
@@ -311,40 +214,13 @@ export default function Dashboard() {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
               <p className="text-muted-foreground">
-                Welcome to your ResumeAI dashboard. Get started with our tools below.
+                Welcome to your CV Chap Chap dashboard. Get started with our tools below.
               </p>
             </div>
-            {isFree && (
-              <Button asChild className="w-full md:w-auto">
-                <Link href="/pricing">
-                  <Crown className="mr-2 h-4 w-4" />
-                  Upgrade to Premium
-                </Link>
-              </Button>
-            )}
+            <Button asChild>
+              <Link href="/pricing">View Pricing Plans</Link>
+            </Button>
           </div>
-
-          {/* Subscription Banner for Free Users */}
-          {isFree && (
-            <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                  <div className="bg-primary/10 p-3 rounded-full">
-                    <Crown className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold">You're on the Free Plan</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Upgrade to Premium for unlimited cover letters, full ATS optimization, and more.
-                    </p>
-                  </div>
-                  <Button asChild className="w-full md:w-auto">
-                    <Link href="/pricing">View Plans</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Stats Overview */}
           <div className="grid gap-6 md:grid-cols-4">
@@ -353,8 +229,16 @@ export default function Dashboard() {
                 <CardTitle className="text-sm font-medium">Total Resumes</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.totalResumes}</div>
-                <p className="text-xs text-muted-foreground">+{Math.max(0, stats.totalResumes - 1)} from last month</p>
+                {loading ? (
+                  <div className="h-8 w-full animate-pulse rounded bg-muted"></div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">{stats.totalResumes}</div>
+                    <p className="text-xs text-muted-foreground">
+                      +{Math.max(0, stats.totalResumes - 1)} from last month
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -362,10 +246,16 @@ export default function Dashboard() {
                 <CardTitle className="text-sm font-medium">Cover Letters</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.totalCoverLetters}</div>
-                <p className="text-xs text-muted-foreground">
-                  +{Math.max(0, stats.totalCoverLetters - 1)} from last month
-                </p>
+                {loading ? (
+                  <div className="h-8 w-full animate-pulse rounded bg-muted"></div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">{stats.totalCoverLetters}</div>
+                    <p className="text-xs text-muted-foreground">
+                      +{Math.max(0, stats.totalCoverLetters - 1)} from last month
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -373,10 +263,16 @@ export default function Dashboard() {
                 <CardTitle className="text-sm font-medium">Applications</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{stats.totalApplications}</div>
-                <p className="text-xs text-muted-foreground">
-                  +{Math.max(0, stats.totalApplications - 1)} from last month
-                </p>
+                {loading ? (
+                  <div className="h-8 w-full animate-pulse rounded bg-muted"></div>
+                ) : (
+                  <>
+                    <div className="text-2xl font-bold">{stats.totalApplications}</div>
+                    <p className="text-xs text-muted-foreground">
+                      +{Math.max(0, stats.totalApplications - 1)} from last month
+                    </p>
+                  </>
+                )}
               </CardContent>
             </Card>
             <Card>
@@ -384,44 +280,111 @@ export default function Dashboard() {
                 <CardTitle className="text-sm font-medium">Profile Completion</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="text-2xl font-bold">{Math.round(stats.completionRate)}%</div>
-                  <TrendingUp className="h-4 w-4 text-green-500" />
-                </div>
-                <Progress value={stats.completionRate} className="mt-2" />
+                {loading ? (
+                  <div className="h-8 w-full animate-pulse rounded bg-muted"></div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="text-2xl font-bold">{Math.round(stats.completionRate)}%</div>
+                      <TrendingUp className="h-4 w-4 text-green-500" />
+                    </div>
+                    <Progress value={stats.completionRate} className="mt-2" />
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => (
-              <Card key={feature.title} className={`overflow-hidden ${feature.locked ? "opacity-80" : ""}`}>
-                <CardHeader className="p-6">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${feature.color}`}>
-                    <feature.icon className="h-6 w-6" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="mt-4">{feature.title}</CardTitle>
-                    {feature.premium && (
-                      <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">Premium</span>
-                    )}
-                  </div>
-                  <CardDescription>{feature.description}</CardDescription>
-                </CardHeader>
-                <CardFooter className="p-6 pt-0">
-                  {feature.locked ? (
-                    <Button variant="outline" className="w-full" onClick={handleUpgradeClick}>
-                      <Lock className="mr-2 h-4 w-4" />
-                      Upgrade to Access
-                    </Button>
-                  ) : (
-                    <Button asChild className="w-full">
-                      <Link href={feature.href}>Get Started</Link>
-                    </Button>
-                  )}
-                </CardFooter>
-              </Card>
-            ))}
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-blue-500/10 text-blue-500">
+                  <FileText className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">Resume Builder</CardTitle>
+                <CardDescription>Create ATS-optimized resumes with our AI-powered builder</CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/resume-builder">Get Started</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-green-500/10 text-green-500">
+                  <PenTool className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">Cover Letter Generator</CardTitle>
+                <CardDescription>Generate tailored cover letters for your job applications</CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/cover-letters">Get Started</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-purple-500/10 text-purple-500">
+                  <FileCheck className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">ATS Optimizer</CardTitle>
+                <CardDescription>Optimize your resume for Applicant Tracking Systems</CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/ats-optimizer">Get Started</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-orange-500/10 text-orange-500">
+                  <Briefcase className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">Job Board</CardTitle>
+                <CardDescription>Browse and apply for jobs that match your skills</CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/job-board">Get Started</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-indigo-500/10 text-indigo-500">
+                  <MessageSquare className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">AI Interview Prep</CardTitle>
+                <CardDescription>Practice interviews with AI-generated questions</CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/interview-prep">Get Started</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-teal-500/10 text-teal-500">
+                  <Activity className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">Activity Log</CardTitle>
+                <CardDescription>Track your recent applications and activity</CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/activity">View Activity</Link>
+                </Button>
+              </CardFooter>
+            </Card>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
@@ -443,7 +406,7 @@ export default function Dashboard() {
                     .fill(0)
                     .map((_, i) => (
                       <Card key={i} className="h-[100px] flex items-center justify-center">
-                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       </Card>
                     ))
                 ) : recentResumes.length > 0 ? (
@@ -451,13 +414,11 @@ export default function Dashboard() {
                     <Card key={resume.id}>
                       <CardHeader className="p-4">
                         <CardTitle className="text-lg truncate">{resume.title}</CardTitle>
-                        <CardDescription>
-                          Last updated: {new Date(resume.updated_at).toLocaleDateString()}
-                        </CardDescription>
+                        <CardDescription>Last updated: {formatDate(resume.updated_at)}</CardDescription>
                       </CardHeader>
                       <CardFooter className="p-4 pt-0">
                         <Button asChild variant="outline" className="w-full">
-                          <Link href={`/dashboard/resume-builder/${resume.id}`}>Edit Resume</Link>
+                          <Link href={`/dashboard/resume-builder?id=${resume.id}`}>Edit Resume</Link>
                         </Button>
                       </CardFooter>
                     </Card>
@@ -476,51 +437,20 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Recent Activity or Interview Prep */}
+            {/* Recent Activity */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">
-                  {isPremium || isCorporate ? "AI Interview Prep" : "Activity Timeline"}
-                </h2>
+                <h2 className="text-xl font-bold">Activity Timeline</h2>
                 <Button asChild variant="outline" size="sm">
-                  <Link href={isPremium || isCorporate ? "/dashboard/interview-prep" : "/dashboard/activity"}>
-                    View All
-                  </Link>
+                  <Link href="/activity">View All</Link>
                 </Button>
               </div>
 
               <Card>
                 <CardContent className="p-4">
-                  {isPremium || isCorporate ? (
-                    <div className="space-y-4 py-2">
-                      <p className="text-sm text-muted-foreground">
-                        Practice your interview skills with AI-generated questions tailored to your industry and role.
-                      </p>
-                      <div className="space-y-3">
-                        <div className="rounded-lg border p-3">
-                          <p className="font-medium">Tell me about yourself</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Common opener for software developer interviews
-                          </p>
-                        </div>
-                        <div className="rounded-lg border p-3">
-                          <p className="font-medium">What are your greatest strengths?</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Focus on skills relevant to the job description
-                          </p>
-                        </div>
-                        <div className="rounded-lg border p-3">
-                          <p className="font-medium">Why do you want to work for this company?</p>
-                          <p className="text-sm text-muted-foreground mt-1">Research the company before answering</p>
-                        </div>
-                      </div>
-                      <Button asChild className="w-full">
-                        <Link href="/dashboard/interview-prep">Start Practice Session</Link>
-                      </Button>
-                    </div>
-                  ) : loading ? (
+                  {loading ? (
                     <div className="flex items-center justify-center h-[300px]">
-                      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
                   ) : recentActivity.length > 0 ? (
                     <div className="space-y-4">
@@ -539,6 +469,9 @@ export default function Dashboard() {
                   ) : (
                     <div className="text-center py-8">
                       <p className="text-muted-foreground">No recent activity</p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Your activity will appear here as you use the platform
+                      </p>
                     </div>
                   )}
                 </CardContent>
