@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js"
+import { createClient } from "@supabase/supabaseClient.ts"
 import type { Database } from "./database.types"
 
 // Initialize the Supabase client

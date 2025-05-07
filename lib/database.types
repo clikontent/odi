@@ -468,163 +468,6 @@ export interface Database {
           created_at?: string
         }
       }
-      notifications: {
-        Row: {
-          id: string
-          user_id: string
-          title: string
-          message: string
-          type: string
-          link: string | null
-          is_read: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          title: string
-          message: string
-          type: string
-          link?: string | null
-          is_read?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          title?: string
-          message?: string
-          type?: string
-          link?: string | null
-          is_read?: boolean
-          created_at?: string
-        }
-      }
-      analytics_events: {
-        Row: {
-          id: string
-          user_id: string
-          event_type: string
-          event_data: Json | null
-          page_url: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          event_type: string
-          event_data?: Json | null
-          page_url?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          event_type?: string
-          event_data?: Json | null
-          page_url?: string | null
-          created_at?: string
-        }
-      }
-      analytics_dashboard_settings: {
-        Row: {
-          id: string
-          user_id: string
-          dashboard_config: Json
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          dashboard_config: Json
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          dashboard_config?: Json
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      jobs: {
-        Row: {
-          id: string
-          company_id: string
-          title: string
-          description: string | null
-          location: string | null
-          type: string | null
-          salary: string | null
-          requirements: string | null
-          deadline: string | null
-          application_url: string | null
-          apply_in_app: boolean | null
-          is_active: boolean | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          company_id: string
-          title: string
-          description?: string | null
-          location?: string | null
-          type?: string | null
-          salary?: string | null
-          requirements?: string | null
-          deadline?: string | null
-          application_url?: string | null
-          apply_in_app?: boolean | null
-          is_active?: boolean | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          company_id?: string
-          title?: string
-          description?: string | null
-          location?: string | null
-          type?: string | null
-          salary?: string | null
-          requirements?: string | null
-          deadline?: string | null
-          application_url?: string | null
-          apply_in_app?: boolean | null
-          is_active?: boolean | null
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      interview_answers: {
-        Row: {
-          id: string
-          user_id: string
-          question: string
-          answer: string | null
-          job_title: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          question: string
-          answer?: string | null
-          job_title?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          question?: string
-          answer?: string | null
-          job_title?: string | null
-          created_at?: string
-        }
-      }
     }
     Views: {
       [_ in never]: never
@@ -640,3 +483,70 @@ export interface Database {
     }
   }
 }
+
+export type Tables<
+  PublicTableNameOrOptions extends
+    | keyof (Database["public"]["Tables"] & Database["public"]["Views"])
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+        Database[PublicTableNameOrOptions["schema"]]["Views"])
+    : never = never
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
+      Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : PublicTableNameOrOptions extends keyof (Database["public"]["Tables"] &
+      Database["public"]["Views"])
+    ? (Database["public"]["Tables"] &
+        Database["public"]["Views"])[PublicTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TableInsert<
+  PublicTableNameOrOptions extends
+    | keyof Database["public"]["Tables"]
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : PublicTableNameOrOptions extends keyof Database["public"]["Tables"]
+    ? Database["public"]["Tables"][PublicTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TableUpdate<
+  PublicTableNameOrOptions extends
+    | keyof Database["public"]["Tables"]
+    | { schema: keyof Database },
+  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
+    : never = never
+> = PublicTableNameOrOptions extends { schema: keyof Database }
+  ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : PublicTableNameOrOptions extends keyof Database["public"]["Tables"]
+    ? Database["public"]["Tables"][PublicTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never

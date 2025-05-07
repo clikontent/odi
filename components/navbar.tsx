@@ -46,7 +46,6 @@ export function Navbar() {
     router.push("/login")
   }
 
-
   // Define main navigation items
   const mainNavItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
