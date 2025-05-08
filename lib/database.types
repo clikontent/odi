@@ -1,10 +1,4 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export interface Database {
   public: {
@@ -468,6 +462,172 @@ export interface Database {
           created_at?: string
         }
       }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          title: string
+          message: string
+          type: string
+          link: string | null
+          is_read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          title: string
+          message: string
+          type: string
+          link?: string | null
+          is_read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          title?: string
+          message?: string
+          type?: string
+          link?: string | null
+          is_read?: boolean
+          created_at?: string
+        }
+      }
+      analytics_events: {
+        Row: {
+          id: string
+          user_id: string
+          event_type: string
+          event_data: Json | null
+          page_url: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          event_type: string
+          event_data?: Json | null
+          page_url?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          event_type?: string
+          event_data?: Json | null
+          page_url?: string | null
+          created_at?: string
+        }
+      }
+      analytics_dashboard_settings: {
+        Row: {
+          id: string
+          user_id: string
+          dashboard_config: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          dashboard_config: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          dashboard_config?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      user_stats: {
+        Row: {
+          id: string
+          user_id: string
+          cover_letters_used: number
+          resume_downloads_used: number
+          storage_used: number
+          storage_limit: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          cover_letters_used?: number
+          resume_downloads_used?: number
+          storage_used?: number
+          storage_limit?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          cover_letters_used?: number
+          resume_downloads_used?: number
+          storage_used?: number
+          storage_limit?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      jobs: {
+        Row: {
+          id: string
+          company_id: string
+          title: string
+          description: string | null
+          location: string | null
+          type: string | null
+          salary: string | null
+          requirements: string | null
+          deadline: string | null
+          application_url: string | null
+          apply_in_app: boolean | null
+          is_active: boolean | null
+          is_featured: boolean | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          title: string
+          description?: string | null
+          location?: string | null
+          type?: string | null
+          salary?: string | null
+          requirements?: string | null
+          deadline?: string | null
+          application_url?: string | null
+          apply_in_app?: boolean | null
+          is_active?: boolean | null
+          is_featured?: boolean | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          title?: string
+          description?: string | null
+          location?: string | null
+          type?: string | null
+          salary?: string | null
+          requirements?: string | null
+          deadline?: string | null
+          application_url?: string | null
+          apply_in_app?: boolean | null
+          is_active?: boolean | null
+          is_featured?: boolean | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -483,3 +643,5 @@ export interface Database {
     }
   }
 }
+
+export type Database = ReturnType<() => Database>
