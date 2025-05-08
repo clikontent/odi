@@ -140,7 +140,7 @@ export default function PricingPage() {
                   <CardTitle>Premium Plan</CardTitle>
                   <CardDescription>Maximum value for job seekers</CardDescription>
                   <div className="mt-4 text-3xl font-bold">
-                    KES 1,000<span className="text-sm font-normal text-muted-foreground">/month</span>
+                    KES 2,000<span className="text-sm font-normal text-muted-foreground">/month</span>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -270,9 +270,9 @@ export default function PricingPage() {
                   <CardTitle>Premium Plan</CardTitle>
                   <CardDescription>Maximum value for job seekers</CardDescription>
                   <div className="mt-4 text-3xl font-bold">
-                    KES 8,000<span className="text-sm font-normal text-muted-foreground">/year</span>
+                    KES 16,800<span className="text-sm font-normal text-muted-foreground">/year</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">Save KES 4,000 compared to monthly</p>
+                  <p className="text-sm text-muted-foreground mt-1">Save KES 7,200 compared to monthly</p>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
@@ -316,9 +316,9 @@ export default function PricingPage() {
                   <CardTitle>Corporate Plan</CardTitle>
                   <CardDescription>For employers & recruiters</CardDescription>
                   <div className="mt-4 text-3xl font-bold">
-                    KES 120,000<span className="text-sm font-normal text-muted-foreground">/year</span>
+                    KES 126,000<span className="text-sm font-normal text-muted-foreground">/year</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">Save KES 60,000 compared to monthly</p>
+                  <p className="text-sm text-muted-foreground mt-1">Save KES 54,000 compared to monthly</p>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">

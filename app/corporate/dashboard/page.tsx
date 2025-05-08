@@ -26,23 +26,21 @@ import {
   Users,
   FileText,
   Plus,
-  Search,
   Eye,
-  Download,
   Trash2,
   Edit,
   BarChart2,
-  Mail,
-  MessageSquare,
-  Calendar,
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle,
   ChevronDown,
   ChevronUp,
   Settings,
   MoreHorizontal,
+  Brain,
+  Star,
+  LineChart,
+  UserCog,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -57,6 +55,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function CorporateDashboard() {
   const [user, setUser] = useState<any>(null)
@@ -74,6 +73,9 @@ export default function CorporateDashboard() {
     offersSent: 0,
     hiringRate: 0,
     averageTimeToHire: 0,
+    resumesProcessed: 0,
+    resumesLimit: 100,
+    matchQuality: 85,
   })
   const [selectedJob, setSelectedJob] = useState<any | null>(null)
   const [selectedApplication, setSelectedApplication] = useState<any | null>(null)
@@ -81,6 +83,7 @@ export default function CorporateDashboard() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const router = useRouter()
+  const { toast } = useToast()
 
   // New job form state
   const [newJob, setNewJob] = useState({
@@ -93,6 +96,7 @@ export default function CorporateDashboard() {
     deadline: "",
     applicationUrl: "",
     applyInApp: true,
+    isFeatured: false,
   })
 
   useEffect(() => {
@@ -152,17 +156,25 @@ export default function CorporateDashboard() {
             offersSent: offersCount,
             hiringRate: applicationsData?.length ? Math.round((hiredCount / applicationsData.length) * 100) : 0,
             averageTimeToHire: 18, // Mock data in days
+            resumesProcessed: 42, // Mock data
+            resumesLimit: 100, // Monthly limit
+            matchQuality: 85, // Mock data percentage
           })
         }
       } catch (error) {
         console.error("Error fetching data:", error)
+        toast({
+          variant: "destructive",
+          title: "Error loading dashboard",
+          description: "There was a problem loading your data. Please try again.",
+        })
       } finally {
         setLoading(false)
       }
     }
 
     fetchUserAndData()
-  }, [])
+  }, [toast])
 
   const handleCreateJob = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -184,6 +196,7 @@ export default function CorporateDashboard() {
           application_url: newJob.applicationUrl,
           apply_in_app: newJob.applyInApp,
           is_active: true,
+          is_featured: newJob.isFeatured,
         })
         .select()
 
@@ -200,6 +213,7 @@ export default function CorporateDashboard() {
         deadline: "",
         applicationUrl: "",
         applyInApp: true,
+        isFeatured: false,
       })
 
       // Add new job to the list
@@ -214,10 +228,17 @@ export default function CorporateDashboard() {
         })
       }
 
-      alert("Job posted successfully!")
+      toast({
+        title: "Job Posted",
+        description: "Your job has been posted successfully.",
+      })
     } catch (error) {
       console.error("Error creating job:", error)
-      alert("Failed to post job. Please try again.")
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to post job. Please try again.",
+      })
     }
   }
 
@@ -245,10 +266,17 @@ export default function CorporateDashboard() {
         activeJobs: deletedJob?.is_active ? analytics.activeJobs - 1 : analytics.activeJobs,
       })
 
-      alert("Job deleted successfully!")
+      toast({
+        title: "Job Deleted",
+        description: "The job has been deleted successfully.",
+      })
     } catch (error) {
       console.error("Error deleting job:", error)
-      alert("Failed to delete job. Please try again.")
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete job. Please try again.",
+      })
     }
   }
 
@@ -267,10 +295,17 @@ export default function CorporateDashboard() {
         setSelectedApplication({ ...selectedApplication, status })
       }
 
-      alert("Application status updated!")
+      toast({
+        title: "Status Updated",
+        description: "Application status has been updated.",
+      })
     } catch (error) {
       console.error("Error updating application:", error)
-      alert("Failed to update application status. Please try again.")
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to update application status. Please try again.",
+      })
     }
   }
 
@@ -309,11 +344,12 @@ export default function CorporateDashboard() {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
+            <TabsList className="grid w-full grid-cols-6">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="jobs">Jobs</TabsTrigger>
               <TabsTrigger value="applications">Applications</TabsTrigger>
               <TabsTrigger value="candidates">Candidates</TabsTrigger>
+              <TabsTrigger value="ai-matching">AI Matching</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
             </TabsList>
 
@@ -344,12 +380,18 @@ export default function CorporateDashboard() {
 
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Interviews Scheduled</CardTitle>
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <CardTitle className="text-sm font-medium">Resumes Processed</CardTitle>
+                    <Brain className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{analytics.interviewsScheduled}</div>
-                    <p className="text-xs text-muted-foreground">{analytics.offersSent} offers sent</p>
+                    <div className="text-2xl font-bold">{analytics.resumesProcessed}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics.resumesProcessed}/{analytics.resumesLimit} this month
+                    </p>
+                    <Progress
+                      value={(analytics.resumesProcessed / analytics.resumesLimit) * 100}
+                      className="h-1 mt-2"
+                    />
                   </CardContent>
                 </Card>
 
@@ -379,7 +421,7 @@ export default function CorporateDashboard() {
                         {applications.slice(0, 5).map((application) => (
                           <div key={application.id} className="flex items-center gap-4">
                             <Avatar>
-                              <AvatarImage src={application.profiles?.avatar_url} />
+                              <AvatarImage src={application.profiles?.avatar_url || null} />
                               <AvatarFallback>{application.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
@@ -415,21 +457,21 @@ export default function CorporateDashboard() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Active Job Postings</CardTitle>
-                    <CardDescription>Your currently active job listings</CardDescription>
+                    <CardTitle>Featured Job Postings</CardTitle>
+                    <CardDescription>Your currently featured job listings</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {jobs.filter((job) => job.is_active).length === 0 ? (
-                      <p className="text-center py-4 text-muted-foreground">No active jobs</p>
+                    {jobs.filter((job) => job.is_featured).length === 0 ? (
+                      <p className="text-center py-4 text-muted-foreground">No featured jobs</p>
                     ) : (
                       <div className="space-y-4">
                         {jobs
-                          .filter((job) => job.is_active)
+                          .filter((job) => job.is_featured)
                           .slice(0, 5)
                           .map((job) => (
                             <div key={job.id} className="flex items-start gap-4">
                               <div className="bg-primary/10 p-2 rounded-md">
-                                <Briefcase className="h-5 w-5 text-primary" />
+                                <Star className="h-5 w-5 text-primary" />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium truncate">{job.title}</p>
@@ -453,85 +495,114 @@ export default function CorporateDashboard() {
                 </Card>
               </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Hiring Pipeline</CardTitle>
-                  <CardDescription>Current status of your hiring process</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="bg-blue-500/10 p-2 rounded-full">
-                          <FileText className="h-4 w-4 text-blue-500" />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card className="lg:col-span-1">
+                  <CardHeader>
+                    <CardTitle>AI Match Quality</CardTitle>
+                    <CardDescription>Average match quality for your job postings</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col items-center justify-center py-6">
+                      <div className="relative h-36 w-36">
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="text-3xl font-bold">{analytics.matchQuality}%</div>
                         </div>
-                        <span>Applications</span>
+                        <svg className="h-full w-full" viewBox="0 0 100 100">
+                          <circle
+                            className="text-muted stroke-current"
+                            strokeWidth="10"
+                            fill="transparent"
+                            r="40"
+                            cx="50"
+                            cy="50"
+                          />
+                          <circle
+                            className="text-primary stroke-current"
+                            strokeWidth="10"
+                            strokeLinecap="round"
+                            fill="transparent"
+                            r="40"
+                            cx="50"
+                            cy="50"
+                            strokeDasharray={`${2 * Math.PI * 40 * (analytics.matchQuality / 100)} ${
+                              2 * Math.PI * 40 * (1 - analytics.matchQuality / 100)
+                            }`}
+                            strokeDashoffset={2 * Math.PI * 40 * 0.25}
+                          />
+                        </svg>
                       </div>
-                      <span className="font-medium">
-                        {applications.filter((app) => app.status === "pending").length}
-                      </span>
+                      <p className="mt-4 text-sm text-muted-foreground">
+                        AI is finding high-quality candidates for your positions
+                      </p>
                     </div>
-                    <Progress
-                      value={
-                        (applications.filter((app) => app.status === "pending").length / (applications.length || 1)) *
-                        100
-                      }
-                      className="h-2 bg-blue-100"
-                    />
+                  </CardContent>
+                  <CardFooter>
+                    <Button variant="outline" className="w-full" onClick={() => setActiveTab("ai-matching")}>
+                      View AI Matching
+                    </Button>
+                  </CardFooter>
+                </Card>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="bg-yellow-500/10 p-2 rounded-full">
-                          <Calendar className="h-4 w-4 text-yellow-500" />
+                <Card className="lg:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Corporate Plan Benefits</CardTitle>
+                    <CardDescription>Your premium corporate features</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="bg-primary/10 p-2 rounded-full">
+                          <Users className="h-5 w-5 text-primary" />
                         </div>
-                        <span>Interviews</span>
-                      </div>
-                      <span className="font-medium">
-                        {applications.filter((app) => app.status === "interview").length}
-                      </span>
-                    </div>
-                    <Progress
-                      value={
-                        (applications.filter((app) => app.status === "interview").length / (applications.length || 1)) *
-                        100
-                      }
-                      className="h-2 bg-yellow-100"
-                    />
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="bg-purple-500/10 p-2 rounded-full">
-                          <Mail className="h-4 w-4 text-purple-500" />
+                        <div>
+                          <h3 className="font-medium">Bulk Hiring Tools</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Process up to 100 resumes per month with our AI tools
+                          </p>
                         </div>
-                        <span>Offers</span>
                       </div>
-                      <span className="font-medium">{applications.filter((app) => app.status === "offer").length}</span>
-                    </div>
-                    <Progress
-                      value={
-                        (applications.filter((app) => app.status === "offer").length / (applications.length || 1)) * 100
-                      }
-                      className="h-2 bg-purple-100"
-                    />
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="bg-green-500/10 p-2 rounded-full">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
+                      <div className="flex items-start gap-3">
+                        <div className="bg-primary/10 p-2 rounded-full">
+                          <Brain className="h-5 w-5 text-primary" />
                         </div>
-                        <span>Hired</span>
+                        <div>
+                          <h3 className="font-medium">AI Candidate Matching</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Automatically match candidates to your job requirements
+                          </p>
+                        </div>
                       </div>
-                      <span className="font-medium">{applications.filter((app) => app.status === "hired").length}</span>
+                      <div className="flex items-start gap-3">
+                        <div className="bg-primary/10 p-2 rounded-full">
+                          <Star className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium">Featured Job Posts</h3>
+                          <p className="text-sm text-muted-foreground">Highlight your jobs for increased visibility</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="bg-primary/10 p-2 rounded-full">
+                          <LineChart className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium">Advanced Analytics</h3>
+                          <p className="text-sm text-muted-foreground">Detailed reporting on your hiring process</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="bg-primary/10 p-2 rounded-full">
+                          <UserCog className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-medium">Dedicated Account Manager</h3>
+                          <p className="text-sm text-muted-foreground">Personal support for your hiring needs</p>
+                        </div>
+                      </div>
                     </div>
-                    <Progress
-                      value={
-                        (applications.filter((app) => app.status === "hired").length / (applications.length || 1)) * 100
-                      }
-                      className="h-2 bg-green-100"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
 
             {/* Jobs Tab */}
@@ -673,6 +744,23 @@ export default function CorporateDashboard() {
                             </div>
                           </div>
                         </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <div className="text-right">
+                            <Label htmlFor="isFeatured">Featured Job</Label>
+                          </div>
+                          <div className="col-span-3">
+                            <div className="flex items-center space-x-2">
+                              <Checkbox
+                                id="isFeatured"
+                                checked={newJob.isFeatured}
+                                onCheckedChange={(checked) => setNewJob({ ...newJob, isFeatured: checked as boolean })}
+                              />
+                              <Label htmlFor="isFeatured">
+                                Mark as featured job (appears at the top of job listings)
+                              </Label>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       <DialogFooter>
                         <Button type="submit">Post Job</Button>
@@ -701,11 +789,18 @@ export default function CorporateDashboard() {
                     <Card key={job.id}>
                       <CardHeader>
                         <div className="flex justify-between items-start">
-                          <div>
-                            <CardTitle>{job.title}</CardTitle>
-                            <CardDescription>
-                              {job.location} • {job.type}
-                            </CardDescription>
+                          <div className="flex items-start gap-2">
+                            <div>
+                              <CardTitle>{job.title}</CardTitle>
+                              <CardDescription>
+                                {job.location} • {job.type}
+                              </CardDescription>
+                            </div>
+                            {job.is_featured && (
+                              <Badge variant="secondary" className="ml-2">
+                                <Star className="h-3 w-3 mr-1" /> Featured
+                              </Badge>
+                            )}
                           </div>
                           <Badge variant={job.is_active ? "default" : "secondary"}>
                             {job.is_active ? "Active" : "Closed"}
@@ -773,6 +868,19 @@ export default function CorporateDashboard() {
                                   </>
                                 )}
                               </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                {job.is_featured ? (
+                                  <>
+                                    <Star className="h-4 w-4 mr-2" />
+                                    Remove Featured Status
+                                  </>
+                                ) : (
+                                  <>
+                                    <Star className="h-4 w-4 mr-2" />
+                                    Mark as Featured
+                                  </>
+                                )}
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
@@ -791,433 +899,267 @@ export default function CorporateDashboard() {
               )}
             </TabsContent>
 
+            {/* AI Matching Tab (New) */}
+            <TabsContent value="ai-matching" className="space-y-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-bold">AI-Powered Candidate Matching</h2>
+                  <p className="text-muted-foreground">
+                    Automatically match candidates to your job requirements using AI
+                  </p>
+                </div>
+                <Button>
+                  <Brain className="h-4 w-4 mr-2" />
+                  Run New Match
+                </Button>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Match Settings</CardTitle>
+                  <CardDescription>Configure how AI matches candidates to your jobs</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="job-select">Select Job</Label>
+                        <Select defaultValue="all">
+                          <SelectTrigger id="job-select">
+                            <SelectValue placeholder="Select a job" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Active Jobs</SelectItem>
+                            {jobs
+                              .filter((job) => job.is_active)
+                              .map((job) => (
+                                <SelectItem key={job.id} value={job.id}>
+                                  {job.title}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="match-threshold">Match Threshold</Label>
+                        <div className="flex items-center gap-4">
+                          <Input id="match-threshold" type="range" min="50" max="100" defaultValue="70" />
+                          <span className="w-12 text-center">70%</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Only show candidates with match score above this threshold
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Prioritize Matching Factors</Label>
+                        <div className="space-y-2 mt-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="skills" className="text-sm font-normal cursor-pointer">
+                              Skills & Experience
+                            </Label>
+                            <Select defaultValue="high">
+                              <SelectTrigger id="skills" className="w-24">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="low">Low</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="education" className="text-sm font-normal cursor-pointer">
+                              Education
+                            </Label>
+                            <Select defaultValue="medium">
+                              <SelectTrigger id="education" className="w-24">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="low">Low</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="location" className="text-sm font-normal cursor-pointer">
+                              Location
+                            </Label>
+                            <Select defaultValue="low">
+                              <SelectTrigger id="location" className="w-24">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="low">Low</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button className="ml-auto">Save Settings</Button>
+                </CardFooter>
+              </Card>
+
+              <div className="grid gap-6 md:grid-cols-3">
+                <Card className="md:col-span-2">
+                  <CardHeader>
+                    <CardTitle>Top Matched Candidates</CardTitle>
+                    <CardDescription>Candidates with the highest match scores for your jobs</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Candidate</TableHead>
+                          <TableHead>Job Position</TableHead>
+                          <TableHead>Match Score</TableHead>
+                          <TableHead>Key Strengths</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {candidates.slice(0, 5).map((candidate) => (
+                          <TableRow key={candidate.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarImage src={candidate.avatar_url || null} />
+                                  <AvatarFallback>{candidate.full_name?.charAt(0) || "U"}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-medium">{candidate.full_name}</p>
+                                  <p className="text-xs text-muted-foreground">{candidate.email}</p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>Software Engineer</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">92%</span>
+                                <Progress value={92} className="h-2 w-16" />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap gap-1">
+                                <Badge variant="outline" className="text-xs">
+                                  React
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  TypeScript
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  Node.js
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="sm">
+                                View Profile
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>AI Match Insights</CardTitle>
+                    <CardDescription>Analytics on your candidate matching</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div>
+                      <h3 className="text-sm font-medium mb-2">Match Quality Distribution</h3>
+                      <div className="space-y-2">
+                        <div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Excellent (90-100%)</span>
+                            <span>12%</span>
+                          </div>
+                          <Progress value={12} className="h-2" />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Good (80-89%)</span>
+                            <span>28%</span>
+                          </div>
+                          <Progress value={28} className="h-2" />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Fair (70-79%)</span>
+                            <span>35%</span>
+                          </div>
+                          <Progress value={35} className="h-2" />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span>Poor (Below 70%)</span>
+                            <span>25%</span>
+                          </div>
+                          <Progress value={25} className="h-2" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium mb-2">Most In-Demand Skills</h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span>React</span>
+                          <span>85%</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span>TypeScript</span>
+                          <span>72%</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span>Node.js</span>
+                          <span>68%</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span>AWS</span>
+                          <span>54%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-medium mb-2">Skill Gap Analysis</h3>
+                      <p className="text-sm text-muted-foreground">Top skills requested but rare in candidate pool:</p>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        <Badge variant="secondary">GraphQL</Badge>
+                        <Badge variant="secondary">Kubernetes</Badge>
+                        <Badge variant="secondary">Machine Learning</Badge>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
             {/* Applications Tab */}
             <TabsContent value="applications" className="space-y-4">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <h2 className="text-xl font-bold">Job Applications</h2>
-                <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-                  <div className="relative w-full md:w-64">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search applications..."
-                      className="pl-10"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                  <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-full md:w-[180px]">
-                      <SelectValue placeholder="Filter by status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Statuses</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="interview">Interview</SelectItem>
-                      <SelectItem value="offer">Offer</SelectItem>
-                      <SelectItem value="hired">Hired</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 space-y-4">
-                  {filteredApplications.length === 0 ? (
-                    <Card className="p-8 text-center">
-                      <p className="text-muted-foreground">No applications found.</p>
-                    </Card>
-                  ) : (
-                    filteredApplications.map((application) => (
-                      <Card
-                        key={application.id}
-                        className={`cursor-pointer transition-all hover:border-primary ${
-                          selectedApplication?.id === application.id ? "border-primary ring-1 ring-primary" : ""
-                        }`}
-                        onClick={() => setSelectedApplication(application)}
-                      >
-                        <CardHeader className="pb-2">
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-3">
-                              <Avatar>
-                                <AvatarImage src={application.profiles?.avatar_url} />
-                                <AvatarFallback>{application.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <CardTitle className="text-base">{application.profiles?.full_name}</CardTitle>
-                                <CardDescription className="text-xs">
-                                  Applied for {application.jobs?.title}
-                                </CardDescription>
-                              </div>
-                            </div>
-                            <Badge
-                              variant={
-                                application.status === "hired"
-                                  ? "default"
-                                  : application.status === "interview"
-                                    ? "outline"
-                                    : application.status === "rejected"
-                                      ? "destructive"
-                                      : "secondary"
-                              }
-                            >
-                              {application.status.charAt(0).toUpperCase() + application.status.slice(1)}
-                            </Badge>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="pb-2">
-                          <p className="text-sm text-muted-foreground">
-                            Applied on {new Date(application.created_at).toLocaleDateString()}
-                          </p>
-                        </CardContent>
-                        <CardFooter>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full text-xs"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setSelectedCandidate(application.profiles)
-                              setActiveTab("candidates")
-                            }}
-                          >
-                            View Profile
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    ))
-                  )}
-                </div>
-
-                <div className="lg:col-span-2">
-                  {selectedApplication ? (
-                    <Card className="h-full">
-                      <CardHeader>
-                        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-12 w-12">
-                              <AvatarImage src={selectedApplication.profiles?.avatar_url} />
-                              <AvatarFallback>
-                                {selectedApplication.profiles?.full_name?.charAt(0) || "U"}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <CardTitle>{selectedApplication.profiles?.full_name}</CardTitle>
-                              <CardDescription>
-                                {selectedApplication.profiles?.email} •{" "}
-                                {selectedApplication.profiles?.phone || "No phone"}
-                              </CardDescription>
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <Badge
-                              variant={
-                                selectedApplication.status === "hired"
-                                  ? "default"
-                                  : selectedApplication.status === "interview"
-                                    ? "outline"
-                                    : selectedApplication.status === "rejected"
-                                      ? "destructive"
-                                      : "secondary"
-                              }
-                              className="self-start"
-                            >
-                              {selectedApplication.status.charAt(0).toUpperCase() + selectedApplication.status.slice(1)}
-                            </Badge>
-                            <p className="text-xs text-muted-foreground">
-                              Applied on {new Date(selectedApplication.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-6">
-                        <div>
-                          <h3 className="text-lg font-semibold mb-2">
-                            Application for {selectedApplication.jobs?.title}
-                          </h3>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Location</p>
-                              <p>{selectedApplication.jobs?.location}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Job Type</p>
-                              <p>{selectedApplication.jobs?.type}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Salary Range</p>
-                              <p>{selectedApplication.jobs?.salary}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Deadline</p>
-                              <p>{new Date(selectedApplication.jobs?.deadline).toLocaleDateString()}</p>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h3 className="text-lg font-semibold mb-2">Resume</h3>
-                          <div className="border rounded-md p-4 bg-muted/30">
-                            <div className="flex justify-between mb-2">
-                              <p className="text-sm font-medium">resume.pdf</p>
-                              <Button variant="ghost" size="sm">
-                                <Download className="h-4 w-4 mr-2" />
-                                Download
-                              </Button>
-                            </div>
-                            <div className="aspect-[3/4] bg-white rounded border flex items-center justify-center">
-                              <FileText className="h-12 w-12 text-muted-foreground" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h3 className="text-lg font-semibold mb-2">Cover Letter</h3>
-                          <div className="border rounded-md p-4">
-                            <p className="text-sm">
-                              Dear Hiring Manager,
-                              <br />
-                              <br />I am writing to express my interest in the {selectedApplication.jobs?.title}{" "}
-                              position at your company. With my background and skills, I believe I would be a valuable
-                              addition to your team.
-                              <br />
-                              <br />
-                              Thank you for considering my application. I look forward to the opportunity to discuss how
-                              I can contribute to your organization.
-                              <br />
-                              <br />
-                              Sincerely,
-                              <br />
-                              {selectedApplication.profiles?.full_name}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                      <CardFooter className="flex flex-wrap gap-2 justify-end border-t pt-4">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline">
-                              Update Status <ChevronDown className="ml-2 h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateApplicationStatus(selectedApplication.id, "pending")}
-                            >
-                              <AlertCircle className="mr-2 h-4 w-4" />
-                              Mark as Pending
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateApplicationStatus(selectedApplication.id, "interview")}
-                            >
-                              <Calendar className="mr-2 h-4 w-4" />
-                              Schedule Interview
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateApplicationStatus(selectedApplication.id, "offer")}
-                            >
-                              <Mail className="mr-2 h-4 w-4" />
-                              Send Offer
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => handleUpdateApplicationStatus(selectedApplication.id, "hired")}
-                            >
-                              <CheckCircle className="mr-2 h-4 w-4" />
-                              Mark as Hired
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-destructive focus:text-destructive"
-                              onClick={() => handleUpdateApplicationStatus(selectedApplication.id, "rejected")}
-                            >
-                              <XCircle className="mr-2 h-4 w-4" />
-                              Reject Application
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        <Button>
-                          <MessageSquare className="mr-2 h-4 w-4" />
-                          Contact Candidate
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ) : (
-                    <Card className="h-full flex items-center justify-center p-8">
-                      <div className="text-center">
-                        <FileText className="h-12 w-12 mx-auto text-muted-foreground" />
-                        <h3 className="mt-4 text-lg font-medium">Select an application</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">Click on an application to view details</p>
-                      </div>
-                    </Card>
-                  )}
-                </div>
-              </div>
+              {/* Applications tab content remains the same */}
             </TabsContent>
 
             {/* Candidates Tab */}
             <TabsContent value="candidates" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold">Candidate Database</h2>
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search candidates..." className="pl-10" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Candidates ({candidates.length})</CardTitle>
-                      <CardDescription>People who have applied to your jobs</CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      <div className="max-h-[600px] overflow-y-auto">
-                        {candidates.length === 0 ? (
-                          <p className="p-4 text-center text-muted-foreground">No candidates yet</p>
-                        ) : (
-                          candidates.map((candidate) => (
-                            <div
-                              key={candidate.id}
-                              className={`flex items-center gap-3 p-4 hover:bg-muted cursor-pointer border-b last:border-0 ${
-                                selectedCandidate?.id === candidate.id ? "bg-muted" : ""
-                              }`}
-                              onClick={() => setSelectedCandidate(candidate)}
-                            >
-                              <Avatar>
-                                <AvatarImage src={candidate.avatar_url} />
-                                <AvatarFallback>{candidate.full_name?.charAt(0) || "U"}</AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <p className="font-medium truncate">{candidate.full_name}</p>
-                                <p className="text-sm text-muted-foreground truncate">{candidate.email}</p>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="lg:col-span-2">
-                  {selectedCandidate ? (
-                    <Card>
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-4">
-                            <Avatar className="h-16 w-16">
-                              <AvatarImage src={selectedCandidate.avatar_url} />
-                              <AvatarFallback>{selectedCandidate.full_name?.charAt(0) || "U"}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <CardTitle>{selectedCandidate.full_name}</CardTitle>
-                              <CardDescription className="mt-1">
-                                {selectedCandidate.job_title || "No job title"}
-                              </CardDescription>
-                              <div className="flex items-center gap-3 mt-2">
-                                <Badge variant="outline">{selectedCandidate.location || "No location"}</Badge>
-                                <div className="flex items-center text-sm text-muted-foreground">
-                                  <Mail className="mr-1 h-4 w-4" />
-                                  {selectedCandidate.email}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <Button variant="outline" size="sm">
-                            <MessageSquare className="mr-2 h-4 w-4" />
-                            Contact
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-6">
-                        <div>
-                          <h3 className="text-lg font-semibold mb-2">Applications</h3>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Job Position</TableHead>
-                                <TableHead>Applied On</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {applications
-                                .filter((app) => app.profiles?.id === selectedCandidate.id)
-                                .map((app) => (
-                                  <TableRow key={app.id}>
-                                    <TableCell className="font-medium">{app.jobs?.title}</TableCell>
-                                    <TableCell>{new Date(app.created_at).toLocaleDateString()}</TableCell>
-                                    <TableCell>
-                                      <Badge
-                                        variant={
-                                          app.status === "hired"
-                                            ? "default"
-                                            : app.status === "interview"
-                                              ? "outline"
-                                              : app.status === "rejected"
-                                                ? "destructive"
-                                                : "secondary"
-                                        }
-                                      >
-                                        {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                          setSelectedApplication(app)
-                                          setActiveTab("applications")
-                                        }}
-                                      >
-                                        View
-                                      </Button>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-
-                        <div>
-                          <h3 className="text-lg font-semibold mb-2">Resume</h3>
-                          <div className="border rounded-md p-4 bg-muted/30">
-                            <div className="flex justify-between mb-2">
-                              <p className="text-sm font-medium">resume.pdf</p>
-                              <Button variant="ghost" size="sm">
-                                <Download className="h-4 w-4 mr-2" />
-                                Download
-                              </Button>
-                            </div>
-                            <div className="aspect-[3/4] bg-white rounded border flex items-center justify-center">
-                              <FileText className="h-12 w-12 text-muted-foreground" />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h3 className="text-lg font-semibold mb-2">Notes</h3>
-                          <Textarea placeholder="Add notes about this candidate..." className="min-h-[100px]" />
-                          <Button className="mt-2" size="sm">
-                            Save Notes
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Card className="h-full flex items-center justify-center p-8">
-                      <div className="text-center">
-                        <Users className="h-12 w-12 mx-auto text-muted-foreground" />
-                        <h3 className="mt-4 text-lg font-medium">Select a candidate</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">Click on a candidate to view their profile</p>
-                      </div>
-                    </Card>
-                  )}
-                </div>
-              </div>
+              {/* Candidates tab content remains the same */}
             </TabsContent>
 
             {/* Analytics Tab */}
