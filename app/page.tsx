@@ -50,7 +50,7 @@ export default function Home() {
               </div>
               <div className="flex items-center justify-center">
                 <img
-                  src=""
+                  src="https://unsplash.com/photos/cropped-shot-business-people-shaking-hands-after-finishing-contract-signing-in-office-HqPS1NmfeQg"
                   alt="Resume Builder Preview"
                   className="rounded-lg object-cover"
                   width={550}
