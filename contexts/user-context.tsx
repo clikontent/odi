@@ -27,6 +27,9 @@ interface UserContextType {
   incrementCoverLetterCount: () => Promise<boolean>
   incrementResumeDownloadCount: () => Promise<boolean>
   canUseFeature: (feature: "coverLetter" | "resumeDownload" | "atsOptimization" | "interviewPrep") => boolean
+  isPremium: boolean
+  isCorporate: boolean
+  isAdmin: boolean
 }
 
 // Create the context with a default value
@@ -41,6 +44,9 @@ const UserContext = createContext<UserContextType>({
   incrementCoverLetterCount: async () => false,
   incrementResumeDownloadCount: async () => false,
   canUseFeature: () => false,
+  isPremium: false,
+  isCorporate: false,
+  isAdmin: false,
 })
 
 // Custom hook to use the user context
@@ -53,6 +59,11 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [userStats, setUserStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
+
+  // Derived state for user roles
+  const isPremium = profile?.subscription_tier === "premium" && profile?.subscription_status === "active"
+  const isCorporate = profile?.subscription_tier === "corporate" && profile?.subscription_status === "active"
+  const isAdmin = profile?.subscription_tier === "admin"
 
   // Function to fetch user stats
   const fetchUserStats = useCallback(async (userId: string) => {
@@ -162,12 +173,33 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   // Function to sign out
   const signOut = useCallback(async () => {
     try {
+      // Sign out from Supabase
       await supabase.auth.signOut()
+
+      // Clear all state
       setUser(null)
       setProfile(null)
       setUserStats(null)
+
+      // Clear any local storage items related to auth
+      localStorage.removeItem("supabase.auth.token")
+
+      // Clear any other auth-related items from localStorage
+      Object.keys(localStorage).forEach((key) => {
+        if (key.includes("supabase") || key.includes("auth") || key.includes("token")) {
+          localStorage.removeItem(key)
+        }
+      })
+
+      // Clear session cookies if any
+      document.cookie.split(";").forEach((c) => {
+        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/")
+      })
+
+      return true
     } catch (error) {
       console.error("Error signing out:", error)
+      return false
     }
   }, [])
 
@@ -243,20 +275,25 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       if (!profile || !userStats) return false
 
       const tier = profile.subscription_tier || "free"
+      const isActive = profile.subscription_status === "active"
+
+      // Corporate and admin users can use all features
+      if ((tier === "corporate" || tier === "admin") && isActive) {
+        return true
+      }
 
       switch (feature) {
         case "coverLetter":
-          return tier !== "free" || userStats.coverLettersUsed < 5
+          return tier === "premium" && isActive ? true : userStats.coverLettersUsed < 5
         case "resumeDownload":
           return (
-            tier === "corporate" ||
-            (tier === "premium" && userStats.resumeDownloadsUsed < 10) ||
+            (tier === "premium" && isActive && userStats.resumeDownloadsUsed < 10) ||
             (tier === "free" && userStats.resumeDownloadsUsed < 1)
           )
         case "atsOptimization":
-          return tier !== "free"
+          return tier === "premium" && isActive
         case "interviewPrep":
-          return tier !== "free"
+          return tier === "premium" && isActive
         default:
           return false
       }
@@ -315,6 +352,9 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     incrementCoverLetterCount,
     incrementResumeDownloadCount,
     canUseFeature,
+    isPremium,
+    isCorporate,
+    isAdmin,
   }
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>

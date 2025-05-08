@@ -22,19 +22,20 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { supabase } from "@/lib/supabase"
 
 export function Header() {
-  const { user, signOut, isLoading } = useUser()
+  const { user, profile, signOut } = useUser()
   const pathname = usePathname()
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [authChecked, setAuthChecked] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   // Check authentication status directly from Supabase
   useEffect(() => {
     const checkAuth = async () => {
+      setIsLoading(true)
       const { data } = await supabase.auth.getSession()
       setIsAuthenticated(!!data.session)
-      setAuthChecked(true)
+      setIsLoading(false)
     }
 
     checkAuth()
@@ -61,8 +62,8 @@ export function Header() {
     pathname?.includes("/corporate") ||
     pathname?.includes("/settings")
 
-  // Determine what navigation items to show based on page context
-  const showNavInHeader = !isInternalPage
+  // Only show public navigation on public pages AND when not authenticated
+  const showPublicNav = !isInternalPage && !isAuthenticated
 
   const userNavigation = [
     { name: "Your Profile", href: "/settings/profile", icon: User },
@@ -72,8 +73,29 @@ export function Header() {
   ]
 
   const handleSignOut = async () => {
-    await signOut()
-    router.push("/")
+    // Show loading state
+    setIsLoading(true)
+
+    try {
+      // Call the signOut function from user context
+      await signOut()
+
+      // Force clear any remaining auth data
+      await supabase.auth.signOut()
+
+      // Clear any local storage items related to auth
+      localStorage.removeItem("supabase.auth.token")
+
+      // Redirect to home page
+      router.push("/")
+
+      // Force reload the page to ensure all state is cleared
+      window.location.href = "/"
+    } catch (error) {
+      console.error("Error signing out:", error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -88,7 +110,7 @@ export function Header() {
 
         {/* Desktop Navigation */}
         <div className="hidden lg:flex lg:gap-x-8">
-          {!isAuthenticated ? (
+          {showPublicNav ? (
             <>
               <Link
                 href="/#features"
@@ -109,7 +131,7 @@ export function Header() {
                 Testimonials
               </Link>
             </>
-          ) : (
+          ) : isAuthenticated ? (
             <>
               <Link
                 href="/dashboard"
@@ -136,7 +158,7 @@ export function Header() {
                 ATS Optimizer
               </Link>
             </>
-          )}
+          ) : null}
         </div>
 
         <div className="flex lg:hidden">
@@ -163,7 +185,7 @@ export function Header() {
               </div>
               <div className="mt-6 flow-root">
                 <div className="-my-6 divide-y divide-border">
-                  {!isAuthenticated ? (
+                  {showPublicNav ? (
                     <div className="space-y-2 py-6">
                       <Link
                         href="/#features"
@@ -187,7 +209,7 @@ export function Header() {
                         Testimonials
                       </Link>
                     </div>
-                  ) : (
+                  ) : isAuthenticated ? (
                     <div className="space-y-2 py-6">
                       <Link
                         href="/dashboard"
@@ -218,7 +240,7 @@ export function Header() {
                         ATS Optimizer
                       </Link>
                     </div>
-                  )}
+                  ) : null}
                   {isAuthenticated ? (
                     <div className="py-6">
                       {userNavigation.map((item) => (
@@ -268,7 +290,7 @@ export function Header() {
         </div>
 
         <div className="hidden lg:flex lg:flex-1 lg:justify-end lg:gap-x-4 items-center">
-          {!authChecked ? (
+          {isLoading ? (
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           ) : isAuthenticated ? (
             <>
@@ -318,9 +340,13 @@ export function Header() {
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">{user?.full_name || "User"}</p>
                       <p className="text-xs leading-none text-muted-foreground">{user?.email || ""}</p>
-                      {user?.subscription_tier !== "free" && (
+                      {profile?.subscription_tier && profile.subscription_tier !== "free" && (
                         <Badge variant="outline" className="mt-1 w-fit">
-                          {user?.subscription_tier === "admin" ? "Admin" : "Corporate"}
+                          {profile.subscription_tier === "admin"
+                            ? "Admin"
+                            : profile.subscription_tier === "corporate"
+                              ? "Corporate"
+                              : "Premium"}
                         </Badge>
                       )}
                     </div>

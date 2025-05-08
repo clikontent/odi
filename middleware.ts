@@ -13,12 +13,14 @@ export async function middleware(request: NextRequest) {
     // Get the pathname
     const { pathname } = request.nextUrl
 
-    // Only check authentication for protected routes
+    // Check authentication for protected routes
     if (
       pathname.startsWith("/dashboard") ||
       pathname.startsWith("/settings") ||
-      pathname.startsWith("/admin") ||
-      pathname.startsWith("/corporate")
+      pathname.startsWith("/files") ||
+      pathname.startsWith("/activity") ||
+      pathname.startsWith("/notifications") ||
+      pathname.startsWith("/analytics")
     ) {
       // Get the user's session
       const {
@@ -36,6 +38,56 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+    // Check for corporate-only routes
+    if (pathname.startsWith("/corporate")) {
+      // Get the user's session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      // If there's no session, redirect to login
+      if (!session) {
+        return NextResponse.redirect(new URL("/login", request.url))
+      }
+
+      // Get the user's profile to check if they're a corporate user
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("subscription_tier, subscription_status")
+        .eq("id", session.user.id)
+        .single()
+
+      // If not a corporate user, redirect to dashboard
+      if (!profile || profile.subscription_tier !== "corporate" || profile.subscription_status !== "active") {
+        return NextResponse.redirect(new URL("/dashboard", request.url))
+      }
+    }
+
+    // Check for admin-only routes
+    if (pathname.startsWith("/admin")) {
+      // Get the user's session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      // If there's no session, redirect to login
+      if (!session) {
+        return NextResponse.redirect(new URL("/login", request.url))
+      }
+
+      // Get the user's profile to check if they're an admin
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("subscription_tier")
+        .eq("id", session.user.id)
+        .single()
+
+      // If not an admin, redirect to dashboard
+      if (!profile || profile.subscription_tier !== "admin") {
+        return NextResponse.redirect(new URL("/dashboard", request.url))
+      }
+    }
+
     // Continue with the request
     return res
   } catch (error) {
@@ -48,5 +100,15 @@ export async function middleware(request: NextRequest) {
 
 // Specify which paths the middleware should run on
 export const config = {
-  matcher: ["/dashboard/:path*", "/settings/:path*", "/admin/:path*", "/corporate/:path*", "/api/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/settings/:path*",
+    "/admin/:path*",
+    "/corporate/:path*",
+    "/files/:path*",
+    "/activity/:path*",
+    "/notifications/:path*",
+    "/analytics/:path*",
+    "/api/:path*",
+  ],
 }
