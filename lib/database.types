@@ -470,17 +470,6 @@ export interface Database {
       }
     }
     Views: {
-      get_user_stats: {
-        Row: {
-          total_resumes: number | null
-          total_cover_letters: number | null
-          total_applications: number | null
-          total_files: number | null
-          storage_used: number | null
-          storage_limit: number | null
-          last_activity: string | null
-        }
-      }
       [_ in never]: never
     }
     Functions: {

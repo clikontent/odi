@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabaseClient"
+import { supabase } from "@/lib/supabase"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,13 +11,14 @@ import {
   PenTool,
   FileCheck,
   Briefcase,
-  BarChart,
   Clock,
   Plus,
   Download,
   Users,
   TrendingUp,
   MessageSquare,
+  Loader2,
+  Activity,
   Lock,
   Crown,
 } from "lucide-react"
@@ -27,11 +28,11 @@ import { useUser } from "@/contexts/user-context"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function Dashboard() {
-  const { user } = useUser()
+  const { user, profile, userStats, loading, canUseFeature } = useUser()
   const { toast } = useToast()
   const [recentResumes, setRecentResumes] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
   const [stats, setStats] = useState({
     totalResumes: 0,
     totalCoverLetters: 0,
@@ -65,184 +66,102 @@ export default function Dashboard() {
     },
   ])
 
-  // Determine features based on subscription tier
-  const isPremium = user?.subscription_tier === "premium"
-  const isCorporate = user?.subscription_tier === "corporate"
+  // Determine subscription tier
+  const isPremium = profile?.subscription_tier === "premium"
+  const isCorporate = profile?.subscription_tier === "corporate"
   const isFree = !isPremium && !isCorporate
 
   useEffect(() => {
     async function fetchData() {
       try {
-        let userResponse
-        try {
-          userResponse = await supabase.auth.getUser()
-        } catch (error) {
-          console.error("Network error fetching user in dashboard:", error)
-          setLoading(false)
+        if (!user) {
+          console.log("No user found, waiting for user data...")
+          setIsLoading(false)
           return
         }
 
-        const {
-          data: { user },
-        } = userResponse
+        console.log("Fetching data for user:", user.id)
+        setIsLoading(true)
 
-        if (user) {
-          // Fetch recent resumes with error handling
-          try {
-            const { data: resumeData, error: resumeError } = await supabase
-              .from("resumes")
-              .select("*")
-              .eq("user_id", user.id)
-              .order("updated_at", { ascending: false })
-              .limit(3)
+        // Fetch recent resumes with error handling
+        try {
+          const { data: resumeData, error: resumeError } = await supabase
+            .from("resumes")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("updated_at", { ascending: false })
+            .limit(3)
 
-            if (resumeError) {
-              console.error("Error fetching resumes:", resumeError)
-            } else {
-              setRecentResumes(resumeData || [])
-            }
-          } catch (error) {
-            console.error("Network error fetching resumes:", error)
-          }
-
-          // Fetch activity timeline with error handling
-          try {
-            const activityData = await getActivityTimeline(user.id, 5)
-            setRecentActivity(activityData || [])
-          } catch (error) {
-            console.error("Error fetching activity timeline:", error)
-          }
-
-          // Fetch stats with error handling
-          try {
-            const { data: resumeCount, error: resumeCountError } = await supabase
-              .from("resumes")
-              .select("id", { count: "exact" })
-              .eq("user_id", user.id)
-
-            if (resumeCountError) {
-              console.error("Error fetching resume count:", resumeCountError)
-            }
-
-            const { data: coverLetterCount, error: coverLetterCountError } = await supabase
-              .from("cover_letters")
-              .select("id", { count: "exact" })
-              .eq("user_id", user.id)
-
-            if (coverLetterCountError) {
-              console.error("Error fetching cover letter count:", coverLetterCountError)
-            }
-
-            const { data: applicationCount, error: applicationCountError } = await supabase
-              .from("job_applications")
-              .select("id", { count: "exact" })
-              .eq("user_id", user.id)
-
-            if (applicationCountError) {
-              console.error("Error fetching application count:", applicationCountError)
-            }
-
-            setStats({
-              totalResumes: resumeCount?.length || 0,
-              totalCoverLetters: coverLetterCount?.length || 0,
-              totalApplications: applicationCount?.length || 0,
-              completionRate: Math.min(100, ((resumeCount?.length || 0) / 5) * 100), // Assuming 5 resumes is "complete"
+          if (resumeError) {
+            console.error("Error fetching resumes:", resumeError)
+            toast({
+              variant: "destructive",
+              title: "Error fetching resumes",
+              description: "Please try refreshing the page.",
             })
-          } catch (error) {
-            console.error("Network error fetching stats:", error)
+          } else {
+            console.log("Fetched resumes:", resumeData)
+            setRecentResumes(resumeData || [])
           }
+        } catch (error) {
+          console.error("Network error fetching resumes:", error)
+        }
+
+        // Fetch activity timeline with error handling
+        try {
+          const activityData = await getActivityTimeline(user.id, 5)
+          setRecentActivity(activityData || [])
+        } catch (error) {
+          console.error("Error fetching activity timeline:", error)
+        }
+
+        // Fetch stats with error handling
+        try {
+          const { data: resumeCount, error: resumeCountError } = await supabase
+            .from("resumes")
+            .select("id", { count: "exact" })
+            .eq("user_id", user.id)
+
+          if (resumeCountError) {
+            console.error("Error fetching resume count:", resumeCountError)
+          }
+
+          const { data: coverLetterCount, error: coverLetterCountError } = await supabase
+            .from("cover_letters")
+            .select("id", { count: "exact" })
+            .eq("user_id", user.id)
+
+          if (coverLetterCountError) {
+            console.error("Error fetching cover letter count:", coverLetterCountError)
+          }
+
+          const { data: applicationCount, error: applicationCountError } = await supabase
+            .from("job_applications")
+            .select("id", { count: "exact" })
+            .eq("user_id", user.id)
+
+          if (applicationCountError) {
+            console.error("Error fetching application count:", applicationCountError)
+          }
+
+          setStats({
+            totalResumes: resumeCount?.length || 0,
+            totalCoverLetters: coverLetterCount?.length || 0,
+            totalApplications: applicationCount?.length || 0,
+            completionRate: Math.min(100, ((resumeCount?.length || 0) / 5) * 100), // Assuming 5 resumes is "complete"
+          })
+        } catch (error) {
+          console.error("Network error fetching stats:", error)
         }
       } catch (error) {
         console.error("Error in dashboard fetchData:", error)
       } finally {
-        setLoading(false)
+        setIsLoading(false)
       }
     }
 
     fetchData()
-  }, [])
-
-  // Define features based on subscription tier
-  const features = [
-    {
-      title: "Resume Builder",
-      description: "Create ATS-optimized resumes with our AI-powered builder",
-      icon: FileText,
-      href: "/dashboard/resume-templates",
-      color: "bg-blue-500/10 text-blue-500",
-      locked: false,
-    },
-    {
-      title: "Cover Letter Generator",
-      description: isFree
-        ? "5 free AI-generated cover letters (one-time)"
-        : "Generate unlimited tailored cover letters",
-      icon: PenTool,
-      href: "/dashboard/cover-letters",
-      color: "bg-green-500/10 text-green-500",
-      locked: false,
-    },
-    {
-      title: "ATS Optimizer",
-      description: isFree
-        ? "Basic ATS score without detailed fixes"
-        : "Full ATS optimization with detailed recommendations",
-      icon: FileCheck,
-      href: "/dashboard/ats-optimizer",
-      color: "bg-purple-500/10 text-purple-500",
-      locked: false,
-    },
-    {
-      title: "Job Board",
-      description: isFree ? "Browse jobs in read-only mode" : "Save jobs, get alerts, and apply directly",
-      icon: Briefcase,
-      href: "/dashboard/job-board",
-      color: "bg-orange-500/10 text-orange-500",
-      locked: false,
-    },
-    {
-      title: "CV Assessment",
-      description: "Get your CV scored and receive improvement suggestions",
-      icon: BarChart,
-      href: "/dashboard/cv-assessment",
-      color: "bg-pink-500/10 text-pink-500",
-      locked: !isPremium && !isCorporate,
-      premium: true,
-    },
-    {
-      title: isPremium || isCorporate ? "AI Interview Prep" : "Recent Activity",
-      description:
-        isPremium || isCorporate
-          ? "Practice interviews with AI-generated questions"
-          : "View your recent applications and activity",
-      icon: isPremium || isCorporate ? MessageSquare : Clock,
-      href: isPremium || isCorporate ? "/dashboard/interview-prep" : "/dashboard/activity",
-      color: isPremium || isCorporate ? "bg-indigo-500/10 text-indigo-500" : "bg-teal-500/10 text-teal-500",
-      locked: false,
-    },
-  ]
-
-  // Add corporate-specific features
-  if (isCorporate) {
-    features.push(
-      {
-        title: "Bulk Hiring Tools",
-        description: "Scan and analyze multiple resumes at once",
-        icon: Users,
-        href: "/dashboard/bulk-hiring",
-        color: "bg-amber-500/10 text-amber-500",
-        locked: false,
-      },
-      {
-        title: "Recruitment Analytics",
-        description: "Advanced analytics and reporting for your hiring process",
-        icon: TrendingUp,
-        href: "/dashboard/recruitment-analytics",
-        color: "bg-cyan-500/10 text-cyan-500",
-        locked: false,
-      },
-    )
-  }
+  }, [user, toast])
 
   // Format date for display
   const formatDate = (dateString) => {
@@ -251,8 +170,6 @@ export default function Dashboard() {
       year: "numeric",
       month: "short",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     })
   }
 
@@ -298,9 +215,21 @@ export default function Dashboard() {
 
   const handleUpgradeClick = () => {
     toast({
-      title: "Upgrade your plan",
+      title: "Upgrade Required",
       description: "This feature is only available on Premium and Corporate plans.",
     })
+  }
+
+  if (loading || isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="container py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          </div>
+        </div>
+      </DashboardLayout>
+    )
   }
 
   return (
@@ -311,11 +240,11 @@ export default function Dashboard() {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
               <p className="text-muted-foreground">
-                Welcome to your ResumeAI dashboard. Get started with our tools below.
+                Welcome to your CV Chap Chap dashboard. Get started with our tools below.
               </p>
             </div>
             {isFree && (
-              <Button asChild className="w-full md:w-auto">
+              <Button asChild>
                 <Link href="/pricing">
                   <Crown className="mr-2 h-4 w-4" />
                   Upgrade to Premium
@@ -335,6 +264,11 @@ export default function Dashboard() {
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold">You're on the Free Plan</h3>
                     <p className="text-sm text-muted-foreground">
+                      <span className="font-medium">Your usage: </span>
+                      Cover Letters: {userStats?.coverLettersUsed || 0}/5 | Resume Downloads:{" "}
+                      {userStats?.resumeDownloadsUsed || 0}/1
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
                       Upgrade to Premium for unlimited cover letters, full ATS optimization, and more.
                     </p>
                   </div>
@@ -346,8 +280,50 @@ export default function Dashboard() {
             </Card>
           )}
 
+          {/* Premium User Banner */}
+          {isPremium && (
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                  <div className="bg-primary/10 p-3 rounded-full">
+                    <Crown className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold">Premium Plan</h3>
+                    <p className="text-sm text-muted-foreground">
+                      <span className="font-medium">Your usage: </span>
+                      Resume Downloads: {userStats?.resumeDownloadsUsed || 0}/10
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Enjoy unlimited cover letters, full ATS optimization, and premium features.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Corporate User Banner */}
+          {isCorporate && (
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="p-6">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                  <div className="bg-primary/10 p-3 rounded-full">
+                    <Crown className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold">Corporate Plan</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Enjoy all premium features plus bulk hiring tools, AI candidate matching, and more.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Stats Overview */}
-          <div className="grid gap-6 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium">Total Resumes</CardTitle>
@@ -394,34 +370,135 @@ export default function Dashboard() {
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {features.map((feature) => (
-              <Card key={feature.title} className={`overflow-hidden ${feature.locked ? "opacity-80" : ""}`}>
-                <CardHeader className="p-6">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${feature.color}`}>
-                    <feature.icon className="h-6 w-6" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="mt-4">{feature.title}</CardTitle>
-                    {feature.premium && (
-                      <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">Premium</span>
-                    )}
-                  </div>
-                  <CardDescription>{feature.description}</CardDescription>
-                </CardHeader>
-                <CardFooter className="p-6 pt-0">
-                  {feature.locked ? (
-                    <Button variant="outline" className="w-full" onClick={handleUpgradeClick}>
-                      <Lock className="mr-2 h-4 w-4" />
-                      Upgrade to Access
-                    </Button>
-                  ) : (
-                    <Button asChild className="w-full">
-                      <Link href={feature.href}>Get Started</Link>
-                    </Button>
+            {/* Resume Builder Card */}
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-blue-500/10 text-blue-500">
+                  <FileText className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">Resume Builder</CardTitle>
+                <CardDescription>
+                  Create ATS-optimized resumes with our AI-powered builder
+                  {isFree && (
+                    <span className="block mt-1 text-xs">
+                      Free Plan: {userStats?.resumeDownloadsUsed || 0}/1 downloads used
+                    </span>
                   )}
-                </CardFooter>
-              </Card>
-            ))}
+                  {isPremium && (
+                    <span className="block mt-1 text-xs">
+                      Premium Plan: {userStats?.resumeDownloadsUsed || 0}/10 downloads used
+                    </span>
+                  )}
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/resume-builder">Get Started</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            {/* Cover Letter Generator Card */}
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-green-500/10 text-green-500">
+                  <PenTool className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">Cover Letter Generator</CardTitle>
+                <CardDescription>
+                  {isFree
+                    ? `Generate tailored cover letters (${userStats?.coverLettersUsed || 0}/5 used)`
+                    : "Generate unlimited tailored cover letters"}
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/cover-letters">Get Started</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            {/* ATS Optimizer Card */}
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-purple-500/10 text-purple-500">
+                  <FileCheck className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">ATS Optimizer</CardTitle>
+                <CardDescription>
+                  {isFree
+                    ? "Basic ATS score without detailed fixes"
+                    : "Full ATS optimization with detailed recommendations"}
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/ats-optimizer">Get Started</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            {/* Job Board Card */}
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-orange-500/10 text-orange-500">
+                  <Briefcase className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">Job Board</CardTitle>
+                <CardDescription>
+                  {isFree ? "Browse jobs in read-only mode" : "Save jobs, get alerts, and apply directly"}
+                </CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/dashboard/job-board">Get Started</Link>
+                </Button>
+              </CardFooter>
+            </Card>
+
+            {/* AI Interview Prep Card */}
+            <Card className={isFree ? "opacity-80" : ""}>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-indigo-500/10 text-indigo-500">
+                  <MessageSquare className="h-6 w-6" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="mt-4">AI Interview Prep</CardTitle>
+                  {isFree && (
+                    <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full mt-4">Premium</span>
+                  )}
+                </div>
+                <CardDescription>Practice interviews with AI-generated questions</CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                {isFree ? (
+                  <Button variant="outline" className="w-full" onClick={handleUpgradeClick}>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Upgrade to Access
+                  </Button>
+                ) : (
+                  <Button asChild className="w-full">
+                    <Link href="/dashboard/interview-prep">Get Started</Link>
+                  </Button>
+                )}
+              </CardFooter>
+            </Card>
+
+            {/* Activity Log Card */}
+            <Card>
+              <CardHeader className="p-6">
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-teal-500/10 text-teal-500">
+                  <Activity className="h-6 w-6" />
+                </div>
+                <CardTitle className="mt-4">Activity Log</CardTitle>
+                <CardDescription>Track your recent applications and activity</CardDescription>
+              </CardHeader>
+              <CardFooter className="p-6 pt-0">
+                <Button asChild className="w-full">
+                  <Link href="/activity">View Activity</Link>
+                </Button>
+              </CardFooter>
+            </Card>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
@@ -438,12 +515,12 @@ export default function Dashboard() {
               </div>
 
               <div className="space-y-4">
-                {loading ? (
+                {isLoading ? (
                   Array(3)
                     .fill(0)
                     .map((_, i) => (
                       <Card key={i} className="h-[100px] flex items-center justify-center">
-                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       </Card>
                     ))
                 ) : recentResumes.length > 0 ? (
@@ -451,13 +528,11 @@ export default function Dashboard() {
                     <Card key={resume.id}>
                       <CardHeader className="p-4">
                         <CardTitle className="text-lg truncate">{resume.title}</CardTitle>
-                        <CardDescription>
-                          Last updated: {new Date(resume.updated_at).toLocaleDateString()}
-                        </CardDescription>
+                        <CardDescription>Last updated: {formatDate(resume.updated_at)}</CardDescription>
                       </CardHeader>
                       <CardFooter className="p-4 pt-0">
                         <Button asChild variant="outline" className="w-full">
-                          <Link href={`/dashboard/resume-builder/${resume.id}`}>Edit Resume</Link>
+                          <Link href={`/dashboard/resume-builder?id=${resume.id}`}>Edit Resume</Link>
                         </Button>
                       </CardFooter>
                     </Card>
@@ -476,22 +551,32 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Recent Activity or Interview Prep */}
+            {/* AI Interview Prep Tool */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">
-                  {isPremium || isCorporate ? "AI Interview Prep" : "Activity Timeline"}
-                </h2>
-                <Button asChild variant="outline" size="sm">
-                  <Link href={isPremium || isCorporate ? "/dashboard/interview-prep" : "/dashboard/activity"}>
-                    View All
-                  </Link>
-                </Button>
+                <h2 className="text-xl font-bold">AI Interview Prep</h2>
+                {!isFree && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/dashboard/interview-prep">View All</Link>
+                  </Button>
+                )}
               </div>
 
               <Card>
                 <CardContent className="p-4">
-                  {isPremium || isCorporate ? (
+                  {isFree ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <Lock className="h-12 w-12 text-muted-foreground mb-4" />
+                      <h3 className="text-lg font-medium">Premium Feature</h3>
+                      <p className="text-sm text-muted-foreground mb-4 max-w-md">
+                        Upgrade to Premium to access AI Interview Prep and practice with personalized interview
+                        questions.
+                      </p>
+                      <Button asChild>
+                        <Link href="/pricing">Upgrade Now</Link>
+                      </Button>
+                    </div>
+                  ) : (
                     <div className="space-y-4 py-2">
                       <p className="text-sm text-muted-foreground">
                         Practice your interview skills with AI-generated questions tailored to your industry and role.
@@ -517,28 +602,6 @@ export default function Dashboard() {
                       <Button asChild className="w-full">
                         <Link href="/dashboard/interview-prep">Start Practice Session</Link>
                       </Button>
-                    </div>
-                  ) : loading ? (
-                    <div className="flex items-center justify-center h-[300px]">
-                      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                    </div>
-                  ) : recentActivity.length > 0 ? (
-                    <div className="space-y-4">
-                      {recentActivity.map((activity: any) => (
-                        <div key={activity.id} className="flex items-start gap-4">
-                          <div className="mt-1 rounded-full bg-primary/10 p-2">
-                            {getActivityIcon(activity.entity_type, activity.action)}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">{getActivityDescription(activity)}</p>
-                            <p className="text-xs text-muted-foreground">{formatDate(activity.created_at)}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground">No recent activity</p>
                     </div>
                   )}
                 </CardContent>
