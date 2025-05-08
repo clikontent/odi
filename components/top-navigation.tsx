@@ -105,7 +105,7 @@ export function TopNavigation() {
   ]
 
   // Select navigation items based on user role
-  const navItems = userRole === "admin" ? adminNavItems : userRole === "corporate" ? corporateNavItems : regularNavItems
+  const navItems = userRole === "admin" ? adminNavItems : userRole === "corporate" ? corporateNavItems : userRole === "regular" ? regularNavItems
 
   const userNavigation = [
     { name: "Your Profile", href: "/settings/profile", icon: UserIcon },
