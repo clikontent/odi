@@ -36,3 +36,6 @@ export function Sidebar() {
     </aside>
   )
 }
+
+// Add the named export SettingsSidebar that points to the Sidebar component
+export const SettingsSidebar = Sidebar

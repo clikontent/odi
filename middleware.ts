@@ -4,25 +4,29 @@ import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 
 export async function middleware(request: NextRequest) {
   try {
-    // Create a Supabase client configured to use cookies
-    const supabase = createMiddlewareClient({ req: request, res: NextResponse.next() })
+    // Create a response object
+    const res = NextResponse.next()
 
-    // Refresh session if expired - required for Server Components
-    await supabase.auth.getSession()
+    // Create a Supabase client configured to use cookies
+    const supabase = createMiddlewareClient({ req: request, res })
 
     // Get the pathname
     const { pathname } = request.nextUrl
 
-    // Check if the pathname starts with /dashboard or /settings
-    if (pathname.startsWith("/dashboard") || pathname.startsWith("/settings")) {
+    // Only check authentication for protected routes
+    if (
+      pathname.startsWith("/dashboard") ||
+      pathname.startsWith("/settings") ||
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/corporate")
+    ) {
       // Get the user's session
       const {
         data: { session },
-        error,
       } = await supabase.auth.getSession()
 
-      // If there's an error or no session, redirect to login
-      if (error || !session) {
+      // If there's no session, redirect to login
+      if (!session) {
         // Create a URL for the login page with a redirect back to the current page
         const redirectUrl = new URL("/login", request.url)
         redirectUrl.searchParams.set("redirect", pathname)
@@ -33,17 +37,16 @@ export async function middleware(request: NextRequest) {
     }
 
     // Continue with the request
-    return NextResponse.next()
+    return res
   } catch (error) {
     console.error("Middleware error:", error)
 
     // If there's an error, allow the request to continue
-    // This prevents the middleware from blocking access in case of errors
     return NextResponse.next()
   }
 }
 
 // Specify which paths the middleware should run on
 export const config = {
-  matcher: ["/dashboard/:path*", "/settings/:path*", "/api/:path*"],
+  matcher: ["/dashboard/:path*", "/settings/:path*", "/admin/:path*", "/corporate/:path*", "/api/:path*"],
 }

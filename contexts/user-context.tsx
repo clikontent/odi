@@ -1,120 +1,106 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
-import { supabase } from "@/lib/supabaseClient"
-import { safeSupabaseQuery } from "@/lib/fetch-utils"
-import type { User } from "@supabase/supabase-js"
-import type { Profile } from "@/lib/supabaseClient"
 
-// Define the context type
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react"
+import { supabase } from "@/lib/supabase"
+import type { User } from "@supabase/supabase-js"
+import type { Profile } from "@/lib/supabase"
+
 interface UserContextType {
-  user: User | null
-  profile: Profile | null
-  loading: boolean
-  error: Error | null
-  refreshProfile: () => Promise<void>
+  user: (Profile & { email?: string }) | null
+  isLoading: boolean
+  signOut: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
-// Create the context with a default value
 const UserContext = createContext<UserContextType>({
   user: null,
-  profile: null,
-  loading: true,
-  error: null,
-  refreshProfile: async () => {},
+  isLoading: true,
+  signOut: async () => {},
+  refreshUser: async () => {},
 })
 
-// Custom hook to use the user context
-export const useUser = () => useContext(UserContext)
+export function UserProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<(Profile & { email?: string }) | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [authUser, setAuthUser] = useState<User | null>(null)
 
-// Provider component
-export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  // Function to fetch user data
-  const fetchUserData = async () => {
+  const fetchUserProfile = useCallback(async (userId: string) => {
     try {
-      setLoading(true)
-      setError(null)
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
 
-      // Get the current session
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession()
-
-      if (sessionError) {
-        throw new Error(`Error fetching session: ${sessionError.message}`)
+      if (error) {
+        console.error("Error fetching user profile:", error)
+        return null
       }
 
-      if (!session) {
-        // No session, so no user is logged in
-        setUser(null)
-        setProfile(null)
-        return
-      }
-
-      // Set the user from the session
-      setUser(session.user)
-
-      // Fetch the user's profile
-      if (session.user) {
-        try {
-          const profile = await safeSupabaseQuery(() =>
-            supabase.from("profiles").select("*").eq("id", session.user.id).single(),
-          )
-
-          setProfile(profile)
-        } catch (profileError) {
-          console.error("Error fetching profile:", profileError)
-          // Don't throw here, we still have the user
-          setProfile(null)
-        }
-      }
+      return data
     } catch (error) {
-      console.error("Error in fetchUserData:", error)
-      setError(error instanceof Error ? error : new Error("Unknown error fetching user data"))
-    } finally {
-      setLoading(false)
+      console.error("Error in fetchUserProfile:", error)
+      return null
     }
-  }
+  }, [])
 
-  // Function to refresh the profile
-  const refreshProfile = async () => {
-    if (!user) return
+  const refreshUser = useCallback(async () => {
+    if (!authUser) return
 
-    try {
-      setLoading(true)
-
-      const profile = await safeSupabaseQuery(() => supabase.from("profiles").select("*").eq("id", user.id).single())
-
-      setProfile(profile)
-    } catch (error) {
-      console.error("Error refreshing profile:", error)
-      setError(error instanceof Error ? error : new Error("Unknown error refreshing profile"))
-    } finally {
-      setLoading(false)
+    const profile = await fetchUserProfile(authUser.id)
+    if (profile) {
+      setUser({
+        ...profile,
+        email: authUser.email,
+      })
     }
-  }
+  }, [authUser, fetchUserProfile])
 
-  // Set up auth state listener
   useEffect(() => {
-    fetchUserData()
+    const initializeUser = async () => {
+      try {
+        setIsLoading(true)
 
-    // Subscribe to auth changes
+        // Get the current session
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (session?.user) {
+          setAuthUser(session.user)
+          const profile = await fetchUserProfile(session.user.id)
+
+          if (profile) {
+            setUser({
+              ...profile,
+              email: session.user.email,
+            })
+          }
+        }
+      } catch (error) {
+        console.error("Error initializing user:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    initializeUser()
+
+    // Set up auth state change listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setUser(session.user)
-        refreshProfile()
-      } else {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        setAuthUser(session.user)
+        const profile = await fetchUserProfile(session.user.id)
+
+        if (profile) {
+          setUser({
+            ...profile,
+            email: session.user.email,
+          })
+        }
+      } else if (event === "SIGNED_OUT") {
         setUser(null)
-        setProfile(null)
+        setAuthUser(null)
       }
     })
 
@@ -122,16 +108,29 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       subscription.unsubscribe()
     }
+  }, [fetchUserProfile])
+
+  const signOut = useCallback(async () => {
+    try {
+      await supabase.auth.signOut()
+      setUser(null)
+      setAuthUser(null)
+    } catch (error) {
+      console.error("Error signing out:", error)
+    }
   }, [])
 
-  // Provide the context value
-  const value = {
-    user,
-    profile,
-    loading,
-    error,
-    refreshProfile,
-  }
+  const value = useMemo(
+    () => ({
+      user,
+      isLoading,
+      signOut,
+      refreshUser,
+    }),
+    [user, isLoading, signOut, refreshUser],
+  )
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>
 }
+
+export const useUser = () => useContext(UserContext)
