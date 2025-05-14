@@ -20,24 +20,25 @@ import {
   Loader2,
   Phone,
   BuildingIcon as BuildingBank,
-  AlertCircle,
   ArrowLeft,
 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { supabase } from "@/lib/supabase"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 export default function PaymentPage() {
   const { user, refreshUser, isPremium, isProfessional } = useUser()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const supabase = createClientComponentClient()
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState("mpesa")
   const [processingPayment, setProcessingPayment] = useState(false)
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [paymentError, setPaymentError] = useState<string | null>(null)
   const [paymentVerified, setPaymentVerified] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
 
   // Get plan and interval from URL params
   const plan = searchParams.get("plan") || (isPremium ? "professional" : "premium")
@@ -76,27 +77,21 @@ export default function PaymentPage() {
 
   useEffect(() => {
     // Check if user is logged in
-    if (user) {
+    async function checkUser() {
+      const { data } = await supabase.auth.getUser()
+      if (data?.user) {
+        setUserId(data.user.id)
+      }
       setLoading(false)
-    } else {
-      // Redirect to login if not logged in
-      router.push("/login?redirect=/payment")
     }
-  }, [user, router])
+
+    checkUser()
+  }, [supabase])
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!user) {
-      toast({
-        variant: "destructive",
-        title: "Authentication error",
-        description: "Please log in to complete your payment",
-      })
-      router.push("/login?redirect=/payment")
-      return
-    }
-
+    // If not logged in, we'll still process the payment but prompt to create an account after
     setProcessingPayment(true)
     setPaymentError(null)
 
@@ -114,26 +109,29 @@ export default function PaymentPage() {
           throw new Error(response.message || "Payment processing failed")
         }
 
-        // Record payment in database
-        await recordPayment(
-          user.id,
-          amount,
-          "USD",
-          "mpesa",
-          response.transactionId || "",
-          response.status || "PENDING",
-          {
-            plan: resumeId ? "resume_download" : plan,
-            interval: resumeId ? "one_time" : interval,
-            resumeId: resumeId,
-            paymentDetails: response.paymentDetails,
-          },
-        )
+        // If user is logged in, record payment
+        if (userId) {
+          // Record payment in database
+          await recordPayment(
+            userId,
+            amount,
+            "USD",
+            "mpesa",
+            response.transactionId || "",
+            response.status || "PENDING",
+            {
+              plan: resumeId ? "resume_download" : plan,
+              interval: resumeId ? "one_time" : interval,
+              resumeId: resumeId,
+              paymentDetails: response.paymentDetails,
+            },
+          )
 
-        // Only update subscription if payment is successful or pending verification
-        // AND if this is a subscription payment (not a resume download)
-        if ((response.status === "COMPLETE" || response.status === "PENDING") && !resumeId) {
-          await updateSubscription(plan, interval)
+          // Only update subscription if payment is successful or pending verification
+          // AND if this is a subscription payment (not a resume download)
+          if ((response.status === "COMPLETE" || response.status === "PENDING") && !resumeId) {
+            await updateSubscription(plan, interval)
+          }
         }
 
         // For resume downloads, mark the payment as verified for testing
@@ -151,19 +149,24 @@ export default function PaymentPage() {
         // Simulate API call for card payment
         await new Promise((resolve) => setTimeout(resolve, 2000))
 
-        // Record payment in database
-        await recordPayment(user.id, amount, "USD", "card", `CARD-${Date.now()}`, "COMPLETE", {
-          plan: resumeId ? "resume_download" : plan,
-          interval: resumeId ? "one_time" : interval,
-          resumeId: resumeId,
-          last4: cardDetails.number.slice(-4),
-        })
+        // If user is logged in, record payment
+        if (userId) {
+          // Record payment in database
+          await recordPayment(userId, amount, "USD", "card", `CARD-${Date.now()}`, "COMPLETE", {
+            plan: resumeId ? "resume_download" : plan,
+            interval: resumeId ? "one_time" : interval,
+            resumeId: resumeId,
+            last4: cardDetails.number.slice(-4),
+          })
 
-        // Update subscription if this is a subscription payment
-        if (!resumeId) {
-          await updateSubscription(plan, interval)
-        } else {
-          // For resume downloads, mark the payment as verified
+          // Update subscription if this is a subscription payment
+          if (!resumeId) {
+            await updateSubscription(plan, interval)
+          }
+        }
+
+        // For resume downloads, mark the payment as verified
+        if (resumeId) {
           setPaymentVerified(true)
         }
 
@@ -177,16 +180,18 @@ export default function PaymentPage() {
         // Simulate bank transfer processing
         await new Promise((resolve) => setTimeout(resolve, 1500))
 
-        // Record payment in database
-        await recordPayment(user.id, amount, "USD", "bank", `BANK-${Date.now()}`, "PENDING", {
-          plan: resumeId ? "resume_download" : plan,
-          interval: resumeId ? "one_time" : interval,
-          resumeId: resumeId,
-          accountName: bankDetails.accountName,
-          bankName: bankDetails.bankName,
-        })
+        // If user is logged in, record payment
+        if (userId) {
+          // Record payment in database
+          await recordPayment(userId, amount, "USD", "bank", `BANK-${Date.now()}`, "PENDING", {
+            plan: resumeId ? "resume_download" : plan,
+            interval: resumeId ? "one_time" : interval,
+            resumeId: resumeId,
+            accountName: bankDetails.accountName,
+            bankName: bankDetails.bankName,
+          })
+        }
 
-        // For bank transfers, we don't update subscription until payment is confirmed
         toast({
           title: "Bank transfer initiated",
           description:
@@ -196,17 +201,22 @@ export default function PaymentPage() {
         setPaymentSuccess(true)
       }
 
-      // Refresh user data
-      await refreshUser()
+      // Refresh user data if logged in
+      if (userId && refreshUser) {
+        await refreshUser()
+      }
 
       // Redirect to success page after successful payment
       setTimeout(() => {
         if (resumeId && paymentVerified) {
           // If this was a resume payment and it's verified, redirect to the resume download
           router.push(`/dashboard/resume-builder/download?id=${resumeId}`)
-        } else {
-          // Otherwise go to dashboard
+        } else if (userId) {
+          // If logged in, go to dashboard
           router.push("/dashboard")
+        } else {
+          // If not logged in, prompt to create an account
+          router.push("/signup?redirect=/dashboard")
         }
       }, 3000)
     } catch (error: any) {
@@ -224,6 +234,8 @@ export default function PaymentPage() {
 
   // Helper function to update subscription in database
   const updateSubscription = async (planType: string, billingInterval: string) => {
+    if (!userId) return false
+
     try {
       const endDate = new Date()
       if (billingInterval === "yearly") {
@@ -241,13 +253,13 @@ export default function PaymentPage() {
           subscription_end_date: endDate.toISOString(),
           subscription_interval: billingInterval,
         })
-        .eq("id", user.id)
+        .eq("id", userId)
 
       if (error) throw error
 
       // Also create or update subscription record
       const { error: subError } = await supabase.from("subscriptions").upsert({
-        user_id: user.id,
+        user_id: userId,
         plan: planType,
         status: "pending", // Set to pending until payment is verified
         interval: billingInterval,
@@ -322,7 +334,9 @@ export default function PaymentPage() {
                   <p className="mt-2 text-muted-foreground">
                     {resumeId && paymentVerified
                       ? "You will be redirected to download your resume shortly."
-                      : "You will be redirected to the dashboard shortly."}
+                      : userId
+                        ? "You will be redirected to the dashboard shortly."
+                        : "You will be redirected to create an account shortly."}
                   </p>
                 </div>
               </CardContent>
@@ -505,19 +519,9 @@ export default function PaymentPage() {
                           <Label htmlFor="accountName">Account Name</Label>
                           <Input
                             id="accountName"
-                            placeholder="Your full name"
+                            placeholder="John Doe"
                             value={bankDetails.accountName}
                             onChange={(e) => setBankDetails({ ...bankDetails, accountName: e.target.value })}
-                            required
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor="bankName">Bank Name</Label>
-                          <Input
-                            id="bankName"
-                            placeholder="e.g., Equity Bank"
-                            value={bankDetails.bankName}
-                            onChange={(e) => setBankDetails({ ...bankDetails, bankName: e.target.value })}
                             required
                           />
                         </div>
@@ -525,41 +529,44 @@ export default function PaymentPage() {
                           <Label htmlFor="accountNumber">Account Number</Label>
                           <Input
                             id="accountNumber"
-                            placeholder="Your account number"
+                            placeholder="1234567890"
                             value={bankDetails.accountNumber}
                             onChange={(e) => setBankDetails({ ...bankDetails, accountNumber: e.target.value })}
                             required
                           />
                         </div>
-                        <Alert>
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>Bank Transfer Information</AlertTitle>
-                          <AlertDescription>
-                            After submitting this form, you will receive bank transfer details. Please complete the
-                            transfer within 24 hours. Your subscription will be activated once payment is confirmed.
-                          </AlertDescription>
-                        </Alert>
+                        <div>
+                          <Label htmlFor="bankName">Bank Name</Label>
+                          <Input
+                            id="bankName"
+                            placeholder="Equity Bank"
+                            value={bankDetails.bankName}
+                            onChange={(e) => setBankDetails({ ...bankDetails, bankName: e.target.value })}
+                            required
+                          />
+                        </div>
                       </TabsContent>
                     </Tabs>
                   </div>
 
                   {paymentError && (
                     <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>Payment Error</AlertTitle>
+                      <AlertTitle>Error</AlertTitle>
                       <AlertDescription>{paymentError}</AlertDescription>
                     </Alert>
                   )}
                 </CardContent>
-
-                <CardFooter className="flex flex-col space-y-4">
-                  <Button type="submit" className="w-full" disabled={processingPayment}>
-                    {processingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {processingPayment ? "Processing..." : `Pay $${amount.toLocaleString()}`}
+                <CardFooter className="flex justify-end">
+                  <Button disabled={processingPayment} type="submit">
+                    {processingPayment ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Processing Payment...
+                      </>
+                    ) : (
+                      "Pay Now"
+                    )}
                   </Button>
-                  <p className="text-center text-sm text-muted-foreground">
-                    By proceeding, you agree to our Terms of Service and Privacy Policy.
-                  </p>
                 </CardFooter>
               </form>
             )}

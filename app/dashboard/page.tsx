@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,7 @@ import { getActivityTimeline } from "@/lib/analytics"
 import { Progress } from "@/components/ui/progress"
 import { useUser } from "@/contexts/user-context"
 import { useToast } from "@/components/ui/use-toast"
+import { useRouter } from "next/navigation"
 
 export default function Dashboard() {
   const {
@@ -77,6 +78,8 @@ export default function Dashboard() {
       posted: "1 week ago",
     },
   ])
+  const supabase = createClientComponentClient()
+  const router = useRouter()
 
   // Determine subscription tier
   const isFree = !isPremium && !isProfessional && !isCorporate
@@ -84,13 +87,14 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchData() {
       try {
-        if (!user) {
+        const { data: userData } = await supabase.auth.getUser()
+        if (!userData?.user) {
           console.log("No user found, waiting for user data...")
           setIsLoading(false)
           return
         }
 
-        console.log("Fetching data for user:", user.id)
+        console.log("Fetching data for user:", userData.user.id)
         setIsLoading(true)
 
         // Fetch recent resumes with error handling
@@ -98,7 +102,7 @@ export default function Dashboard() {
           const { data: resumeData, error: resumeError } = await supabase
             .from("resumes")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userData.user.id)
             .order("updated_at", { ascending: false })
             .limit(3)
 
@@ -119,7 +123,7 @@ export default function Dashboard() {
 
         // Fetch activity timeline with error handling
         try {
-          const activityData = await getActivityTimeline(user.id, 5)
+          const activityData = await getActivityTimeline(userData.user.id, 5)
           setRecentActivity(activityData || [])
         } catch (error) {
           console.error("Error fetching activity timeline:", error)
@@ -130,7 +134,7 @@ export default function Dashboard() {
           const { data: resumeCount, error: resumeCountError } = await supabase
             .from("resumes")
             .select("id", { count: "exact" })
-            .eq("user_id", user.id)
+            .eq("user_id", userData.user.id)
 
           if (resumeCountError) {
             console.error("Error fetching resume count:", resumeCountError)
@@ -139,7 +143,7 @@ export default function Dashboard() {
           const { data: coverLetterCount, error: coverLetterCountError } = await supabase
             .from("cover_letters")
             .select("id", { count: "exact" })
-            .eq("user_id", user.id)
+            .eq("user_id", userData.user.id)
 
           if (coverLetterCountError) {
             console.error("Error fetching cover letter count:", coverLetterCountError)
@@ -148,7 +152,7 @@ export default function Dashboard() {
           const { data: applicationCount, error: applicationCountError } = await supabase
             .from("job_applications")
             .select("id", { count: "exact" })
-            .eq("user_id", user.id)
+            .eq("user_id", userData.user.id)
 
           if (applicationCountError) {
             console.error("Error fetching application count:", applicationCountError)
@@ -171,7 +175,7 @@ export default function Dashboard() {
     }
 
     fetchData()
-  }, [user, toast])
+  }, [supabase, toast])
 
   // Format date for display
   const formatDate = (dateString) => {
@@ -478,7 +482,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardFooter className="p-6 pt-0">
                 {isFree ? (
-                  <Button variant="outline" className="w-full" onClick={handleUpgradeClick}>
+                  <Button variant="outline" className="w-full" onClick={() => router.push("/payment?plan=premium")}>
                     <Lock className="mr-2 h-4 w-4" />
                     Upgrade to Access
                   </Button>
@@ -536,9 +540,12 @@ export default function Dashboard() {
                         <CardTitle className="text-lg truncate">{resume.title}</CardTitle>
                         <CardDescription>Last updated: {formatDate(resume.updated_at)}</CardDescription>
                       </CardHeader>
-                      <CardFooter className="p-4 pt-0">
-                        <Button asChild variant="outline" className="w-full">
+                      <CardFooter className="p-4 pt-0 flex justify-between">
+                        <Button asChild variant="outline">
                           <Link href={`/dashboard/resume-builder?id=${resume.id}`}>Edit Resume</Link>
+                        </Button>
+                        <Button asChild variant="outline">
+                          <Link href={`/dashboard/resume-builder/download?id=${resume.id}`}>Download</Link>
                         </Button>
                       </CardFooter>
                     </Card>
@@ -578,7 +585,7 @@ export default function Dashboard() {
                         Upgrade to Premium to access AI Interview Prep and practice with personalized interview
                         questions.
                       </p>
-                      <Button onClick={handleUpgradeClick}>Upgrade Now</Button>
+                      <Button onClick={() => router.push("/payment?plan=premium")}>Upgrade Now</Button>
                     </div>
                   ) : (
                     <div className="space-y-4 py-2">

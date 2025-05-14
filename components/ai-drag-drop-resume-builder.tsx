@@ -1,15 +1,13 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { DragDropContext, Droppable, Draggable, type DropResult } from "react-beautiful-dnd"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Plus, Trash2, GripVertical, Lightbulb, RefreshCw, Settings, Palette } from "lucide-react"
+import { Plus, Trash2, Lightbulb, RefreshCw, Settings, Palette, ArrowUpDown } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +18,7 @@ import {
 } from "@/components/ui/dialog"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { toast } from "@/components/ui/use-toast"
-import { useAuth } from "@/contexts/auth-provider"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 // Define the section types
 type SectionType =
@@ -76,7 +74,7 @@ interface AIDragDropResumeBuilderProps {
 }
 
 export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDragDropResumeBuilderProps) {
-  const { user } = useAuth()
+  const supabase = createClientComponentClient()
   const [sections, setSections] = useState<Section[]>([])
   const [previewHtml, setPreviewHtml] = useState<string>("")
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit")
@@ -101,9 +99,19 @@ export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDr
   const [aiPrompt, setAiPrompt] = useState("")
   const [currentSectionId, setCurrentSectionId] = useState<string | null>(null)
   const resumeContentRef = useRef<HTMLDivElement>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   // Initialize on component mount
   useEffect(() => {
+    async function getUserId() {
+      const { data } = await supabase.auth.getUser()
+      if (data?.user) {
+        setUserId(data.user.id)
+      }
+    }
+
+    getUserId()
+
     if (templates.length > 0 && !selectedTemplate) {
       setSelectedTemplate(templates[0])
     }
@@ -214,7 +222,7 @@ export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDr
     }
 
     setSections(initialSections)
-  }, [initialData, templates, selectedTemplate])
+  }, [initialData, templates, selectedTemplate, supabase])
 
   // Update preview HTML whenever sections change
   useEffect(() => {
@@ -223,19 +231,19 @@ export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDr
     }
   }, [sections, selectedTemplate, colorScheme])
 
-  // Handle drag end event
-  const onDragEnd = (result: DropResult) => {
-    const { destination, source } = result
-
-    // If dropped outside the list or no movement
-    if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
+  // Move a section up or down
+  const moveSection = (index: number, direction: "up" | "down") => {
+    if ((direction === "up" && index === 0) || (direction === "down" && index === sections.length - 1)) {
       return
     }
 
-    // Reorder the sections
-    const newSections = Array.from(sections)
-    const [removed] = newSections.splice(source.index, 1)
-    newSections.splice(destination.index, 0, removed)
+    const newSections = [...sections]
+    const newIndex = direction === "up" ? index - 1 : index + 1
+
+    // Swap the sections
+    const temp = newSections[index]
+    newSections[index] = newSections[newIndex]
+    newSections[newIndex] = temp
 
     setSections(newSections)
   }
@@ -399,24 +407,30 @@ export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDr
           return
       }
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt,
-          userId: user?.id,
-        }),
-      })
+      // Simulate API response for now
+      await new Promise((resolve) => setTimeout(resolve, 1500))
 
-      if (!response.ok) throw new Error("Failed to generate AI suggestions")
+      let suggestions: string[] = []
 
-      const data = await response.json()
+      if (type === "summary") {
+        suggestions = [
+          "Experienced software engineer with a strong background in web development and a passion for creating efficient, scalable applications. Proficient in JavaScript, React, and Node.js with a track record of delivering high-quality solutions that meet business requirements.",
+          "Detail-oriented software developer with 5+ years of experience building responsive web applications. Skilled in modern JavaScript frameworks and committed to writing clean, maintainable code that delivers exceptional user experiences.",
+        ]
+      } else if (type === "skills") {
+        suggestions = ["JavaScript", "React", "Node.js", "TypeScript", "REST APIs", "Git", "Agile Methodologies"]
+      } else if (type === "experience") {
+        suggestions = [
+          "Reduced application load time by 40% through code optimization and implementing lazy loading techniques",
+          "Developed and maintained RESTful APIs that processed over 1M requests daily",
+          "Implemented automated testing that increased code coverage from 65% to 90%",
+          "Led a team of 3 developers to deliver a critical project ahead of schedule",
+        ]
+      }
 
       // Update the section with suggestions
       const newSections = [...sections]
-      newSections[sectionIndex].suggestions = data.suggestions || data.results || [data.text]
+      newSections[sectionIndex].suggestions = suggestions
       setSections(newSections)
 
       toast({
@@ -506,20 +520,11 @@ export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDr
     setIsGeneratingContent(true)
 
     try {
-      const response = await fetch("/api/generate-content", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: aiPrompt,
-          userId: user?.id,
-        }),
-      })
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1500))
 
-      if (!response.ok) throw new Error("Failed to generate content")
-
-      const data = await response.json()
+      const generatedText =
+        "This is AI-generated content based on your prompt. In a real implementation, this would be generated by an AI model like GPT-4 or Gemini."
 
       // Find the section and update it
       const sectionIndex = sections.findIndex((s) => s.id === currentSectionId)
@@ -529,21 +534,21 @@ export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDr
       const section = newSections[sectionIndex]
 
       if (section.type === "summary" || section.type === "custom") {
-        newSections[sectionIndex].content = data.text
+        newSections[sectionIndex].content = generatedText
       } else if (section.type === "experience") {
         newSections[sectionIndex].content = {
           ...section.content,
-          description: data.text,
+          description: generatedText,
         }
       } else if (section.type === "education") {
         newSections[sectionIndex].content = {
           ...section.content,
-          description: data.text,
+          description: generatedText,
         }
       } else if (section.type === "projects") {
         newSections[sectionIndex].content = {
           ...section.content,
-          description: data.text,
+          description: generatedText,
         }
       }
 
@@ -717,6 +722,7 @@ export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDr
       languages: sections.find((s) => s.type === "languages")?.content || [],
       templateId: selectedTemplate?.id,
       colorScheme,
+      html: previewHtml,
     }
 
     onSave(data)
@@ -1407,202 +1413,191 @@ export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDr
           <CardTitle>Resume Builder</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "edit" | "preview")}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="edit">Edit</TabsTrigger>
-              <TabsTrigger value="preview">Preview</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="edit">
-              <div className="mb-6">
-                <Label htmlFor="jobDescription">Job Description (for AI optimization)</Label>
-                <div className="flex gap-2 mt-1">
-                  <Textarea
-                    id="jobDescription"
-                    placeholder="Paste the job description here to get AI suggestions..."
-                    value={jobDescription}
-                    onChange={(e) => setJobDescription(e.target.value)}
-                    rows={3}
-                  />
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={optimizeForJob}
-                      disabled={!jobDescription}
-                      className="whitespace-nowrap"
-                    >
-                      <Lightbulb className="h-4 w-4 mr-2" />
-                      Optimize Resume
-                    </Button>
-                  </div>
-                </div>
+          <div className="mb-6">
+            <Label htmlFor="jobDescription">Job Description (for AI optimization)</Label>
+            <div className="flex gap-2 mt-1">
+              <Textarea
+                id="jobDescription"
+                placeholder="Paste the job description here to get AI suggestions..."
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                rows={3}
+              />
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={optimizeForJob}
+                  disabled={!jobDescription}
+                  className="whitespace-nowrap"
+                >
+                  <Lightbulb className="h-4 w-4 mr-2" />
+                  Optimize Resume
+                </Button>
               </div>
+            </div>
+          </div>
 
-              <div className="flex justify-between items-center mb-4">
-                <Label>Template & Design</Label>
-                <div className="flex gap-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm">
-                        <Palette className="h-4 w-4 mr-2" />
-                        Colors
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80">
-                      <div className="space-y-4">
-                        <h4 className="font-medium text-sm">Color Scheme</h4>
-                        <div>
-                          <Label htmlFor="primaryColor">Primary Color</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div
-                              className="w-6 h-6 rounded-full border"
-                              style={{ backgroundColor: colorScheme.primary }}
-                            />
-                            <Input
-                              id="primaryColor"
-                              type="text"
-                              value={colorScheme.primary}
-                              onChange={(e) => setColorScheme({ ...colorScheme, primary: e.target.value })}
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="secondaryColor">Secondary Color</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div
-                              className="w-6 h-6 rounded-full border"
-                              style={{ backgroundColor: colorScheme.secondary }}
-                            />
-                            <Input
-                              id="secondaryColor"
-                              type="text"
-                              value={colorScheme.secondary}
-                              onChange={(e) => setColorScheme({ ...colorScheme, secondary: e.target.value })}
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="textColor">Text Color</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div
-                              className="w-6 h-6 rounded-full border"
-                              style={{ backgroundColor: colorScheme.text }}
-                            />
-                            <Input
-                              id="textColor"
-                              type="text"
-                              value={colorScheme.text}
-                              onChange={(e) => setColorScheme({ ...colorScheme, text: e.target.value })}
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="backgroundColor">Background Color</Label>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div
-                              className="w-6 h-6 rounded-full border"
-                              style={{ backgroundColor: colorScheme.background }}
-                            />
-                            <Input
-                              id="backgroundColor"
-                              type="text"
-                              value={colorScheme.background}
-                              onChange={(e) => setColorScheme({ ...colorScheme, background: e.target.value })}
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <h4 className="font-medium text-sm mb-2">Presets</h4>
-                          <ToggleGroup type="single" className="justify-start">
-                            <ToggleGroupItem
-                              value="modern"
-                              onClick={() =>
-                                setColorScheme({
-                                  primary: "#0f766e",
-                                  secondary: "#0e7490",
-                                  text: "#1e293b",
-                                  background: "#f8fafc",
-                                })
-                              }
-                            >
-                              Modern
-                            </ToggleGroupItem>
-                            <ToggleGroupItem
-                              value="classic"
-                              onClick={() =>
-                                setColorScheme({
-                                  primary: "#1e40af",
-                                  secondary: "#1e3a8a",
-                                  text: "#111827",
-                                  background: "#ffffff",
-                                })
-                              }
-                            >
-                              Classic
-                            </ToggleGroupItem>
-                            <ToggleGroupItem
-                              value="bold"
-                              onClick={() =>
-                                setColorScheme({
-                                  primary: "#9333ea",
-                                  secondary: "#7e22ce",
-                                  text: "#1e293b",
-                                  background: "#f8fafc",
-                                })
-                              }
-                            >
-                              Bold
-                            </ToggleGroupItem>
-                          </ToggleGroup>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                  <Button variant="outline" size="sm" onClick={() => setShowTemplateSelector(true)}>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Change Template
+          <div className="flex justify-between items-center mb-4">
+            <Label>Template & Design</Label>
+            <div className="flex gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Palette className="h-4 w-4 mr-2" />
+                    Colors
                   </Button>
-                </div>
-              </div>
-
-              <DragDropContext onDragEnd={onDragEnd}>
-                <Droppable droppableId="resume-sections">
-                  {(provided) => (
-                    <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4">
-                      {sections.map((section, index) => (
-                        <Draggable key={section.id} draggableId={section.id} index={index}>
-                          {(provided) => (
-                            <Card
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className="border border-gray-200"
-                            >
-                              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                                <div className="flex items-center">
-                                  <div {...provided.dragHandleProps} className="mr-2 cursor-grab">
-                                    <GripVertical className="h-5 w-5 text-gray-400" />
-                                  </div>
-                                  <CardTitle className="text-lg">{section.title}</CardTitle>
-                                </div>
-                                {section.type !== "personal" && section.type !== "summary" && (
-                                  <Button variant="ghost" size="icon" onClick={() => removeSection(index)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                )}
-                              </CardHeader>
-                              <CardContent>{renderSectionEditor(section, index)}</CardContent>
-                            </Card>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                  <div className="space-y-4">
+                    <h4 className="font-medium text-sm">Color Scheme</h4>
+                    <div>
+                      <Label htmlFor="primaryColor">Primary Color</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: colorScheme.primary }} />
+                        <Input
+                          id="primaryColor"
+                          type="text"
+                          value={colorScheme.primary}
+                          onChange={(e) => setColorScheme({ ...colorScheme, primary: e.target.value })}
+                        />
+                      </div>
                     </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
+                    <div>
+                      <Label htmlFor="secondaryColor">Secondary Color</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div
+                          className="w-6 h-6 rounded-full border"
+                          style={{ backgroundColor: colorScheme.secondary }}
+                        />
+                        <Input
+                          id="secondaryColor"
+                          type="text"
+                          value={colorScheme.secondary}
+                          onChange={(e) => setColorScheme({ ...colorScheme, secondary: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="textColor">Text Color</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="w-6 h-6 rounded-full border" style={{ backgroundColor: colorScheme.text }} />
+                        <Input
+                          id="textColor"
+                          type="text"
+                          value={colorScheme.text}
+                          onChange={(e) => setColorScheme({ ...colorScheme, text: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="backgroundColor">Background Color</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div
+                          className="w-6 h-6 rounded-full border"
+                          style={{ backgroundColor: colorScheme.background }}
+                        />
+                        <Input
+                          id="backgroundColor"
+                          type="text"
+                          value={colorScheme.background}
+                          onChange={(e) => setColorScheme({ ...colorScheme, background: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium text-sm mb-2">Presets</h4>
+                      <ToggleGroup type="single" className="justify-start">
+                        <ToggleGroupItem
+                          value="modern"
+                          onClick={() =>
+                            setColorScheme({
+                              primary: "#0f766e",
+                              secondary: "#0e7490",
+                              text: "#1e293b",
+                              background: "#f8fafc",
+                            })
+                          }
+                        >
+                          Modern
+                        </ToggleGroupItem>
+                        <ToggleGroupItem
+                          value="classic"
+                          onClick={() =>
+                            setColorScheme({
+                              primary: "#1e40af",
+                              secondary: "#1e3a8a",
+                              text: "#111827",
+                              background: "#ffffff",
+                            })
+                          }
+                        >
+                          Classic
+                        </ToggleGroupItem>
+                        <ToggleGroupItem
+                          value="bold"
+                          onClick={() =>
+                            setColorScheme({
+                              primary: "#9333ea",
+                              secondary: "#7e22ce",
+                              text: "#1e293b",
+                              background: "#f8fafc",
+                            })
+                          }
+                        >
+                          Bold
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              <Button variant="outline" size="sm" onClick={() => setShowTemplateSelector(true)}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Change Template
+              </Button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4 overflow-y-auto max-h-[800px] pr-2">
+              {sections.map((section, index) => (
+                <Card key={section.id} className="border border-gray-200">
+                  <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                    <div className="flex items-center">
+                      <div className="flex flex-col mr-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => moveSection(index, "up")}
+                          disabled={index === 0}
+                          className="h-5 w-5"
+                        >
+                          <ArrowUpDown className="h-4 w-4 rotate-90" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => moveSection(index, "down")}
+                          disabled={index === sections.length - 1}
+                          className="h-5 w-5"
+                        >
+                          <ArrowUpDown className="h-4 w-4 -rotate-90" />
+                        </Button>
+                      </div>
+                      <CardTitle className="text-lg">{section.title}</CardTitle>
+                    </div>
+                    {section.type !== "personal" && section.type !== "summary" && (
+                      <Button variant="ghost" size="icon" onClick={() => removeSection(index)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent>{renderSectionEditor(section, index)}</CardContent>
+                </Card>
+              ))}
 
               <div className="flex gap-2 justify-between mt-6">
                 <div>
@@ -1623,31 +1618,25 @@ export function AIDragDropResumeBuilder({ initialData, onSave, templates }: AIDr
                     Add Custom
                   </Button>
                 </div>
+              </div>
+            </div>
 
-                <Button onClick={handleSave}>Save Resume</Button>
+            <div className="bg-muted rounded-lg p-4 min-h-[800px]" ref={resumeContentRef}>
+              <div className="bg-white shadow-lg rounded-lg h-full overflow-auto">
+                {previewHtml ? (
+                  <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-muted-foreground">Preview will appear here</p>
+                  </div>
+                )}
               </div>
-            </TabsContent>
+            </div>
+          </div>
 
-            <TabsContent value="preview">
-              <div className="bg-muted rounded-lg p-8 min-h-[800px]" ref={resumeContentRef}>
-                <div className="bg-white shadow-lg rounded-lg h-full overflow-auto">
-                  {previewHtml ? (
-                    <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      <p className="text-muted-foreground">Preview will appear here</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex justify-between mt-4">
-                <Button variant="outline" onClick={() => setActiveTab("edit")}>
-                  Back to Editor
-                </Button>
-                <Button onClick={handleSave}>Save Resume</Button>
-              </div>
-            </TabsContent>
-          </Tabs>
+          <div className="flex justify-end mt-4">
+            <Button onClick={handleSave}>Save Resume</Button>
+          </div>
         </CardContent>
       </Card>
 
