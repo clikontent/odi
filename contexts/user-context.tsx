@@ -16,6 +16,9 @@ interface UserStats {
   storage_limit?: number
 }
 
+// Define subscription tiers
+export type SubscriptionTier = "free" | "premium" | "professional" | "corporate" | "admin"
+
 // Define the context type
 interface UserContextType {
   user: User | null
@@ -27,11 +30,17 @@ interface UserContextType {
   signOut: () => Promise<void>
   incrementCoverLetterCount: () => Promise<boolean>
   incrementResumeDownloadCount: () => Promise<boolean>
-  canUseFeature: (feature: "coverLetter" | "resumeDownload" | "atsOptimization" | "interviewPrep") => boolean
+  canUseFeature: (
+    feature: "coverLetter" | "resumeDownload" | "atsOptimization" | "interviewPrep" | "jobBoard",
+  ) => boolean
   isPremium: boolean
+  isProfessional: boolean
   isCorporate: boolean
   isAdmin: boolean
-  handleUpgradeClick: () => void
+  handleUpgradeClick: (targetTier?: SubscriptionTier) => void
+  getFeatureLimit: (feature: "coverLetter" | "resumeDownload") => number
+  getFeatureUsage: (feature: "coverLetter" | "resumeDownload") => number
+  calculateResumePrice: () => number
 }
 
 // Create the context with a default value
@@ -47,9 +56,13 @@ const UserContext = createContext<UserContextType>({
   incrementResumeDownloadCount: async () => false,
   canUseFeature: () => false,
   isPremium: false,
+  isProfessional: false,
   isCorporate: false,
   isAdmin: false,
   handleUpgradeClick: () => {},
+  getFeatureLimit: () => 0,
+  getFeatureUsage: () => 0,
+  calculateResumePrice: () => 5,
 })
 
 // Custom hook to use the user context
@@ -66,24 +79,89 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
   // Derived state for user roles
   const isPremium = profile?.subscription_tier === "premium" && profile?.subscription_status === "active"
+  const isProfessional = profile?.subscription_tier === "professional" && profile?.subscription_status === "active"
   const isCorporate = profile?.subscription_tier === "corporate" && profile?.subscription_status === "active"
   const isAdmin = profile?.subscription_tier === "admin"
 
-  // Function to handle upgrade button clicks
-  const handleUpgradeClick = useCallback(() => {
-    if (!user) {
-      router.push("/login?redirect=/pricing")
-      return
+  // Function to calculate resume price based on subscription
+  const calculateResumePrice = useCallback(() => {
+    if (isPremium || isProfessional || isCorporate || isAdmin) {
+      return 0 // Free for paid tiers
     }
+    return 5 // $5 for free tier
+  }, [isPremium, isProfessional, isCorporate, isAdmin])
 
-    if (isPremium) {
-      // Premium users upgrade to corporate
-      router.push("/payment?plan=corporate&interval=monthly")
-    } else {
-      // Free users upgrade to premium
-      router.push("/payment?plan=premium&interval=monthly")
-    }
-  }, [user, isPremium, router])
+  // Function to get feature usage
+  const getFeatureUsage = useCallback(
+    (feature: "coverLetter" | "resumeDownload") => {
+      if (!userStats) return 0
+
+      switch (feature) {
+        case "coverLetter":
+          return userStats.coverLettersUsed
+        case "resumeDownload":
+          return userStats.resumeDownloadsUsed
+        default:
+          return 0
+      }
+    },
+    [userStats],
+  )
+
+  // Function to get feature limits based on subscription tier
+  const getFeatureLimit = useCallback(
+    (feature: "coverLetter" | "resumeDownload") => {
+      if (isProfessional || isCorporate || isAdmin) {
+        return Number.POSITIVE_INFINITY // Unlimited for professional and above
+      }
+
+      if (isPremium) {
+        switch (feature) {
+          case "coverLetter":
+            return 10 // 10 cover letters for premium
+          case "resumeDownload":
+            return 5 // 5 resumes for premium
+          default:
+            return 0
+        }
+      }
+
+      // Free tier
+      switch (feature) {
+        case "coverLetter":
+          return 5 // 5 cover letters for free
+        case "resumeDownload":
+          return 0 // Pay per resume for free
+        default:
+          return 0
+      }
+    },
+    [isPremium, isProfessional, isCorporate, isAdmin],
+  )
+
+  // Function to handle upgrade button clicks
+  const handleUpgradeClick = useCallback(
+    (targetTier?: SubscriptionTier) => {
+      if (!user) {
+        router.push("/login?redirect=/pricing")
+        return
+      }
+
+      // Determine which tier to upgrade to
+      let upgradeTier = targetTier || "premium"
+
+      if (!targetTier) {
+        if (isPremium) {
+          upgradeTier = "professional"
+        } else if (isProfessional) {
+          upgradeTier = "corporate"
+        }
+      }
+
+      router.push(`/payment?plan=${upgradeTier}&interval=monthly`)
+    },
+    [user, isPremium, isProfessional, router],
+  )
 
   // Function to fetch user stats
   const fetchUserStats = useCallback(async (userId: string) => {
@@ -258,7 +336,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       // Check if user can create more cover letters
-      if (!isPremium && !isCorporate && !isAdmin && userStats.coverLettersUsed >= 5) {
+      const limit = getFeatureLimit("coverLetter")
+      if (userStats.coverLettersUsed >= limit && limit !== Number.POSITIVE_INFINITY) {
         return false
       }
 
@@ -281,7 +360,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error incrementing cover letter count:", error)
       return false
     }
-  }, [user, userStats, isPremium, isCorporate, isAdmin])
+  }, [user, userStats, getFeatureLimit])
 
   // Function to increment resume download count
   const incrementResumeDownloadCount = useCallback(async () => {
@@ -289,11 +368,8 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       // Check if user can download more resumes
-      if (!isPremium && !isCorporate && !isAdmin && userStats.resumeDownloadsUsed >= 1) {
-        return false
-      }
-
-      if (isPremium && !isCorporate && !isAdmin && userStats.resumeDownloadsUsed >= 10) {
+      const limit = getFeatureLimit("resumeDownload")
+      if (userStats.resumeDownloadsUsed >= limit && limit !== Number.POSITIVE_INFINITY) {
         return false
       }
 
@@ -316,15 +392,15 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error incrementing resume download count:", error)
       return false
     }
-  }, [user, userStats, isPremium, isCorporate, isAdmin])
+  }, [user, userStats, getFeatureLimit])
 
   // Function to check if user can use a feature
   const canUseFeature = useCallback(
-    (feature: "coverLetter" | "resumeDownload" | "atsOptimization" | "interviewPrep") => {
+    (feature: "coverLetter" | "resumeDownload" | "atsOptimization" | "interviewPrep" | "jobBoard") => {
       if (!profile || !userStats) return false
 
-      // Admin and corporate users can use all features
-      if (isAdmin || isCorporate) {
+      // Admin, corporate, and professional users can use all features
+      if (isAdmin || isCorporate || isProfessional) {
         return true
       }
 
@@ -332,13 +408,15 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       if (isPremium) {
         switch (feature) {
           case "coverLetter":
-            return true // Unlimited for premium
+            return userStats.coverLettersUsed < 10 // Limited to 10 for premium
           case "resumeDownload":
-            return userStats.resumeDownloadsUsed < 10 // Limited to 10 for premium
+            return userStats.resumeDownloadsUsed < 5 // Limited to 5 for premium
           case "atsOptimization":
             return true // Available for premium
           case "interviewPrep":
             return true // Available for premium
+          case "jobBoard":
+            return true // Full access for premium
           default:
             return false
         }
@@ -349,16 +427,18 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         case "coverLetter":
           return userStats.coverLettersUsed < 5 // Limited to 5 for free
         case "resumeDownload":
-          return userStats.resumeDownloadsUsed < 1 // Limited to 1 for free
+          return true // Pay per resume for free users
         case "atsOptimization":
           return false // Not available for free
         case "interviewPrep":
           return false // Not available for free
+        case "jobBoard":
+          return true // Limited to public jobs for free
         default:
           return false
       }
     },
-    [profile, userStats, isPremium, isCorporate, isAdmin],
+    [profile, userStats, isPremium, isProfessional, isCorporate, isAdmin],
   )
 
   // Set up auth state listener
@@ -443,9 +523,13 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     incrementResumeDownloadCount,
     canUseFeature,
     isPremium,
+    isProfessional,
     isCorporate,
     isAdmin,
     handleUpgradeClick,
+    getFeatureLimit,
+    getFeatureUsage,
+    calculateResumePrice,
   }
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>

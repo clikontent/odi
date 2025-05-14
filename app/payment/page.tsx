@@ -27,7 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
 
 export default function PaymentPage() {
-  const { user, refreshUser, isPremium } = useUser()
+  const { user, refreshUser, isPremium, isProfessional } = useUser()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
@@ -37,19 +37,27 @@ export default function PaymentPage() {
   const [processingPayment, setProcessingPayment] = useState(false)
   const [paymentSuccess, setPaymentSuccess] = useState(false)
   const [paymentError, setPaymentError] = useState<string | null>(null)
+  const [paymentVerified, setPaymentVerified] = useState(false)
 
   // Get plan and interval from URL params
-  const plan = searchParams.get("plan") || (isPremium ? "corporate" : "premium")
+  const plan = searchParams.get("plan") || (isPremium ? "professional" : "premium")
   const interval = searchParams.get("interval") || "monthly"
+  const resumeId = searchParams.get("resumeId") || null
 
   // Calculate amount based on plan and interval
   const [amount, setAmount] = useState(() => {
-    if (plan === "premium") {
-      return interval === "yearly" ? 16800 : 2000
-    } else if (plan === "corporate") {
-      return interval === "yearly" ? 126000 : 15000
+    if (resumeId) {
+      return 5 // $5 for a single resume
     }
-    return 500 // Default amount for one-time purchases
+
+    if (plan === "premium") {
+      return interval === "yearly" ? 126 : 15
+    } else if (plan === "professional") {
+      return interval === "yearly" ? 210 : 25
+    } else if (plan === "corporate") {
+      return interval === "yearly" ? 1260 : 150
+    }
+    return 5 // Default amount for one-time purchases
   })
 
   // Payment method specific states
@@ -98,8 +106,8 @@ export default function PaymentPage() {
         const response = await processMpesaPayment(
           mpesaNumber,
           amount,
-          "KES",
-          `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan (${interval})`,
+          "USD",
+          resumeId ? "Resume Download" : `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan (${interval})`,
         )
 
         if (!response.success) {
@@ -110,20 +118,27 @@ export default function PaymentPage() {
         await recordPayment(
           user.id,
           amount,
-          "KES",
+          "USD",
           "mpesa",
           response.transactionId || "",
           response.status || "PENDING",
           {
-            plan,
-            interval,
+            plan: resumeId ? "resume_download" : plan,
+            interval: resumeId ? "one_time" : interval,
+            resumeId: resumeId,
             paymentDetails: response.paymentDetails,
           },
         )
 
         // Only update subscription if payment is successful or pending verification
-        if (response.status === "COMPLETE" || response.status === "PENDING") {
+        // AND if this is a subscription payment (not a resume download)
+        if ((response.status === "COMPLETE" || response.status === "PENDING") && !resumeId) {
           await updateSubscription(plan, interval)
+        }
+
+        // For resume downloads, mark the payment as verified for testing
+        if (resumeId) {
+          setPaymentVerified(true)
         }
 
         toast({
@@ -137,14 +152,20 @@ export default function PaymentPage() {
         await new Promise((resolve) => setTimeout(resolve, 2000))
 
         // Record payment in database
-        await recordPayment(user.id, amount, "KES", "card", `CARD-${Date.now()}`, "COMPLETE", {
-          plan,
-          interval,
+        await recordPayment(user.id, amount, "USD", "card", `CARD-${Date.now()}`, "COMPLETE", {
+          plan: resumeId ? "resume_download" : plan,
+          interval: resumeId ? "one_time" : interval,
+          resumeId: resumeId,
           last4: cardDetails.number.slice(-4),
         })
 
-        // Update subscription
-        await updateSubscription(plan, interval)
+        // Update subscription if this is a subscription payment
+        if (!resumeId) {
+          await updateSubscription(plan, interval)
+        } else {
+          // For resume downloads, mark the payment as verified
+          setPaymentVerified(true)
+        }
 
         toast({
           title: "Payment successful",
@@ -157,9 +178,10 @@ export default function PaymentPage() {
         await new Promise((resolve) => setTimeout(resolve, 1500))
 
         // Record payment in database
-        await recordPayment(user.id, amount, "KES", "bank", `BANK-${Date.now()}`, "PENDING", {
-          plan,
-          interval,
+        await recordPayment(user.id, amount, "USD", "bank", `BANK-${Date.now()}`, "PENDING", {
+          plan: resumeId ? "resume_download" : plan,
+          interval: resumeId ? "one_time" : interval,
+          resumeId: resumeId,
           accountName: bankDetails.accountName,
           bankName: bankDetails.bankName,
         })
@@ -179,7 +201,13 @@ export default function PaymentPage() {
 
       // Redirect to success page after successful payment
       setTimeout(() => {
-        router.push("/dashboard")
+        if (resumeId && paymentVerified) {
+          // If this was a resume payment and it's verified, redirect to the resume download
+          router.push(`/dashboard/resume-builder/download?id=${resumeId}`)
+        } else {
+          // Otherwise go to dashboard
+          router.push("/dashboard")
+        }
       }, 3000)
     } catch (error: any) {
       console.error("Payment error:", error)
@@ -208,7 +236,7 @@ export default function PaymentPage() {
         .from("profiles")
         .update({
           subscription_tier: planType,
-          subscription_status: "active",
+          subscription_status: "pending", // Set to pending until payment is verified
           subscription_start_date: new Date().toISOString(),
           subscription_end_date: endDate.toISOString(),
           subscription_interval: billingInterval,
@@ -221,7 +249,7 @@ export default function PaymentPage() {
       const { error: subError } = await supabase.from("subscriptions").upsert({
         user_id: user.id,
         plan: planType,
-        status: "active",
+        status: "pending", // Set to pending until payment is verified
         interval: billingInterval,
         current_period_start: new Date().toISOString(),
         current_period_end: endDate.toISOString(),
@@ -238,7 +266,11 @@ export default function PaymentPage() {
   }
 
   const handleCancel = () => {
-    router.push("/pricing")
+    if (resumeId) {
+      router.push(`/dashboard/resume-builder?id=${resumeId}`)
+    } else {
+      router.push("/pricing")
+    }
   }
 
   if (loading) {
@@ -257,7 +289,7 @@ export default function PaymentPage() {
         <div className="mx-auto max-w-3xl">
           <Button variant="ghost" className="mb-4 flex items-center" onClick={handleCancel}>
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Pricing
+            {resumeId ? "Back to Resume Builder" : "Back to Pricing"}
           </Button>
 
           <Card>
@@ -266,8 +298,9 @@ export default function PaymentPage() {
                 <div>
                   <CardTitle className="text-2xl">Complete Your Payment</CardTitle>
                   <CardDescription>
-                    {plan.charAt(0).toUpperCase() + plan.slice(1)} Plan (
-                    {interval.charAt(0).toUpperCase() + interval.slice(1)})
+                    {resumeId
+                      ? "Resume Download"
+                      : `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan (${interval.charAt(0).toUpperCase() + interval.slice(1)})`}
                   </CardDescription>
                 </div>
                 <Building className="h-10 w-10 text-primary" />
@@ -286,7 +319,11 @@ export default function PaymentPage() {
                         ? "Please complete the bank transfer using the provided details. Your subscription will be activated once payment is confirmed."
                         : "Thank you for your payment. Your subscription has been activated."}
                   </p>
-                  <p className="mt-2 text-muted-foreground">You will be redirected to the dashboard shortly.</p>
+                  <p className="mt-2 text-muted-foreground">
+                    {resumeId && paymentVerified
+                      ? "You will be redirected to download your resume shortly."
+                      : "You will be redirected to the dashboard shortly."}
+                  </p>
                 </div>
               </CardContent>
             ) : (
@@ -297,52 +334,90 @@ export default function PaymentPage() {
                     <div className="mt-3 rounded-lg border bg-card p-4">
                       <div className="flex justify-between">
                         <div>
-                          <p className="font-medium">{plan.charAt(0).toUpperCase() + plan.slice(1)} Plan</p>
+                          <p className="font-medium">
+                            {resumeId ? "Resume Download" : `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`}
+                          </p>
                           <p className="text-sm text-muted-foreground">
-                            {interval === "yearly" ? "Annual billing" : "Monthly billing"}
+                            {resumeId
+                              ? "One-time payment"
+                              : interval === "yearly"
+                                ? "Annual billing"
+                                : "Monthly billing"}
                           </p>
                         </div>
                         <div className="space-y-1 text-right">
-                          <div className="text-xl font-bold">KES {amount.toLocaleString()}</div>
-                          <p className="text-xs text-muted-foreground">
-                            Approximately ${(amount / 130).toFixed(2)} USD
-                          </p>
+                          <div className="text-xl font-bold">${amount.toLocaleString()}</div>
+                          <p className="text-xs text-muted-foreground">Approximately KES {(amount * 130).toFixed(0)}</p>
                         </div>
                       </div>
-                      <div className="mt-4 space-y-2">
-                        <div className="flex items-center">
-                          <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                          <span className="text-sm">
-                            {plan === "premium"
-                              ? "Access to premium resume templates"
-                              : "Bulk hiring tools (100+ resumes/month)"}
-                          </span>
+                      {!resumeId && (
+                        <div className="mt-4 space-y-2">
+                          {plan === "premium" && (
+                            <>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">10 cover letters per month</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">5 resume downloads per month</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">Full ATS optimization</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">AI interview prep tool</span>
+                              </div>
+                            </>
+                          )}
+                          {plan === "professional" && (
+                            <>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">Unlimited cover letters</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">Unlimited resume downloads</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">Advanced ATS optimization</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">Premium interview prep tool</span>
+                              </div>
+                            </>
+                          )}
+                          {plan === "corporate" && (
+                            <>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">Bulk hiring tools (100+ resumes/month)</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">AI-powered candidate matching</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">Featured job posts</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">Dashboard analytics & reporting</span>
+                              </div>
+                              <div className="flex items-center">
+                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                <span className="text-sm">Dedicated account manager</span>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        <div className="flex items-center">
-                          <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                          <span className="text-sm">
-                            {plan === "premium" ? "AI-powered resume optimization" : "AI-powered candidate matching"}
-                          </span>
-                        </div>
-                        <div className="flex items-center">
-                          <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                          <span className="text-sm">
-                            {plan === "premium" ? "Unlimited exports to PDF and Word" : "Featured job posts"}
-                          </span>
-                        </div>
-                        <div className="flex items-center">
-                          <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                          <span className="text-sm">
-                            {plan === "premium" ? "Priority customer support" : "Dashboard analytics & reporting"}
-                          </span>
-                        </div>
-                        {plan === "corporate" && (
-                          <div className="flex items-center">
-                            <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                            <span className="text-sm">Dedicated account manager</span>
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
 
@@ -480,7 +555,7 @@ export default function PaymentPage() {
                 <CardFooter className="flex flex-col space-y-4">
                   <Button type="submit" className="w-full" disabled={processingPayment}>
                     {processingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {processingPayment ? "Processing..." : `Pay KES ${amount.toLocaleString()}`}
+                    {processingPayment ? "Processing..." : `Pay $${amount.toLocaleString()}`}
                   </Button>
                   <p className="text-center text-sm text-muted-foreground">
                     By proceeding, you agree to our Terms of Service and Privacy Policy.

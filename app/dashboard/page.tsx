@@ -28,7 +28,19 @@ import { useUser } from "@/contexts/user-context"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function Dashboard() {
-  const { user, profile, userStats, loading, canUseFeature, isPremium, isCorporate, handleUpgradeClick } = useUser()
+  const {
+    user,
+    profile,
+    userStats,
+    loading,
+    canUseFeature,
+    isPremium,
+    isProfessional,
+    isCorporate,
+    handleUpgradeClick,
+    getFeatureLimit,
+    getFeatureUsage,
+  } = useUser()
   const { toast } = useToast()
   const [recentResumes, setRecentResumes] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
@@ -45,7 +57,7 @@ export default function Dashboard() {
       title: "Software Engineer",
       company: "Tech Innovations Ltd",
       location: "Nairobi, Kenya",
-      salary: "KSh 120,000 - 180,000",
+      salary: "$120,000 - $180,000",
       posted: "2 days ago",
     },
     {
@@ -53,7 +65,7 @@ export default function Dashboard() {
       title: "Marketing Manager",
       company: "Global Marketing Solutions",
       location: "Mombasa, Kenya",
-      salary: "KSh 100,000 - 150,000",
+      salary: "$100,000 - $150,000",
       posted: "3 days ago",
     },
     {
@@ -61,13 +73,13 @@ export default function Dashboard() {
       title: "Financial Analyst",
       company: "East African Bank",
       location: "Nairobi, Kenya",
-      salary: "KSh 90,000 - 130,000",
+      salary: "$90,000 - $130,000",
       posted: "1 week ago",
     },
   ])
 
   // Determine subscription tier
-  const isFree = !isPremium && !isCorporate
+  const isFree = !isPremium && !isProfessional && !isCorporate
 
   useEffect(() => {
     async function fetchData() {

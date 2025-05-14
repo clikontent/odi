@@ -1,655 +1,682 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Slider } from "@/components/ui/slider"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Download,
-  Save,
-  ZoomIn,
-  ZoomOut,
-  Edit,
-  Eye,
-  Maximize,
-  Minimize,
-  FileIcon,
-  Sparkles,
-  Lock,
-  Unlock,
-} from "lucide-react"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { toast } from "@/components/ui/use-toast"
-import { generateSummary, suggestSkills, suggestAchievements } from "@/lib/gemini"
-import { cn } from "@/lib/utils"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useToast } from "@/components/ui/use-toast"
+import { useUser } from "@/contexts/user-context"
+import { supabase } from "@/lib/supabase"
+import { PlusCircle, Trash2, Save, Download, ArrowRight, Loader2 } from "lucide-react"
 
-interface StructuredResumeBuilderProps {
-  templateHtml: string
-  templateCss: string
-  onSave: (html: string) => void
-}
-
-// Define section types for structured editing
-type SectionType = "header" | "summary" | "experience" | "education" | "skills" | "custom"
-
-interface Section {
+interface ResumeSection {
   id: string
-  type: SectionType
+  type: string
   title: string
-  content: string
-  isLocked: boolean
+  content: any
 }
 
-const StructuredResumeBuilder = ({ templateHtml, templateCss, onSave }: StructuredResumeBuilderProps) => {
-  const [mode, setMode] = useState<"edit" | "preview">("edit")
-  const [zoom, setZoom] = useState(100)
-  const [isFullscreen, setIsFullscreen] = useState(false)
-  const [lastSaved, setLastSaved] = useState<Date | null>(null)
-  const [aiDialogOpen, setAiDialogOpen] = useState(false)
-  const [aiPrompt, setAiPrompt] = useState<string>("")
-  const [aiSection, setAiSection] = useState<string | null>(null)
-  const [aiLoading, setAiLoading] = useState(false)
-  const [sections, setSections] = useState<Section[]>([])
-  const [editingSection, setEditingSection] = useState<string | null>(null)
-  const [editContent, setEditContent] = useState("")
+interface Education {
+  school: string
+  degree: string
+  fieldOfStudy: string
+  startDate: string
+  endDate: string
+  description: string
+}
 
-  const previewRef = useRef<HTMLDivElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const editorRef = useRef<HTMLDivElement>(null)
+interface Experience {
+  company: string
+  position: string
+  location: string
+  startDate: string
+  endDate: string
+  description: string
+}
 
-  // Parse template into structured sections
+interface Skill {
+  name: string
+  level: string
+}
+
+interface PersonalInfo {
+  fullName: string
+  email: string
+  phone: string
+  address: string
+  linkedin?: string
+  website?: string
+}
+
+export function StructuredResumeBuilder() {
+  const { user, canUseFeature, calculateResumePrice, getFeatureLimit, getFeatureUsage } = useUser()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
+  const resumeId = searchParams.get("id")
+
+  const [activeTab, setActiveTab] = useState("personal-info")
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [resumeTitle, setResumeTitle] = useState("My Resume")
+  const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({
+    fullName: "",
+    email: "",
+    phone: "",
+    address: "",
+    linkedin: "",
+    website: "",
+  })
+  const [education, setEducation] = useState<Education[]>([
+    {
+      school: "",
+      degree: "",
+      fieldOfStudy: "",
+      startDate: "",
+      endDate: "",
+      description: "",
+    },
+  ])
+  const [experience, setExperience] = useState<Experience[]>([
+    {
+      company: "",
+      position: "",
+      location: "",
+      startDate: "",
+      endDate: "",
+      description: "",
+    },
+  ])
+  const [skills, setSkills] = useState<Skill[]>([{ name: "", level: "Intermediate" }])
+  const [summary, setSummary] = useState("")
+
+  // Load resume data if editing an existing resume
   useEffect(() => {
-    if (!templateHtml) return
+    const loadResumeData = async () => {
+      if (!resumeId || !user) return
 
-    // Create a temporary div to parse the HTML
-    const tempDiv = document.createElement("div")
-    tempDiv.innerHTML = templateHtml
+      setIsLoading(true)
+      try {
+        const { data, error } = await supabase
+          .from("resumes")
+          .select("*")
+          .eq("id", resumeId)
+          .eq("user_id", user.id)
+          .single()
 
-    // Extract sections based on common resume structure
-    const extractedSections: Section[] = []
+        if (error) throw error
 
-    // Helper function to create a section from an element
-    const createSectionFromElement = (element: Element, type: SectionType, title: string) => {
-      return {
-        id: `section-${type}-${extractedSections.length}`,
-        type,
-        title,
-        content: element.innerHTML,
-        isLocked: false,
+        if (data) {
+          setResumeTitle(data.title || "My Resume")
+
+          // Parse and set resume content
+          const content = data.content || {}
+
+          if (content.personalInfo) {
+            setPersonalInfo(content.personalInfo)
+          }
+
+          if (content.education && Array.isArray(content.education)) {
+            setEducation(content.education)
+          }
+
+          if (content.experience && Array.isArray(content.experience)) {
+            setExperience(content.experience)
+          }
+
+          if (content.skills && Array.isArray(content.skills)) {
+            setSkills(content.skills)
+          }
+
+          if (content.summary) {
+            setSummary(content.summary)
+          }
+        }
+      } catch (error) {
+        console.error("Error loading resume:", error)
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load resume data. Please try again.",
+        })
+      } finally {
+        setIsLoading(false)
       }
     }
 
-    // Try to find header section (usually contains name, contact info)
-    const headerElements = tempDiv.querySelectorAll(
-      'header, .header, .contact, [class*="header"], [class*="contact"], h1',
-    )
-    if (headerElements.length > 0) {
-      extractedSections.push(createSectionFromElement(headerElements[0], "header", "Contact Information"))
-    }
+    loadResumeData()
+  }, [resumeId, user, toast])
 
-    // Try to find summary section
-    const summaryElements = tempDiv.querySelectorAll(
-      '.summary, .objective, [class*="summary"], [class*="objective"], [class*="profile"]',
-    )
-    if (summaryElements.length > 0) {
-      extractedSections.push(createSectionFromElement(summaryElements[0], "summary", "Professional Summary"))
-    }
-
-    // Try to find experience section
-    const experienceElements = tempDiv.querySelectorAll('.experience, [class*="experience"], [class*="work"]')
-    if (experienceElements.length > 0) {
-      extractedSections.push(createSectionFromElement(experienceElements[0], "experience", "Work Experience"))
-    }
-
-    // Try to find education section
-    const educationElements = tempDiv.querySelectorAll('.education, [class*="education"], [class*="academic"]')
-    if (educationElements.length > 0) {
-      extractedSections.push(createSectionFromElement(educationElements[0], "education", "Education"))
-    }
-
-    // Try to find skills section
-    const skillsElements = tempDiv.querySelectorAll('.skills, [class*="skills"], [class*="competencies"]')
-    if (skillsElements.length > 0) {
-      extractedSections.push(createSectionFromElement(skillsElements[0], "skills", "Skills"))
-    }
-
-    // If we couldn't find structured sections, create a single custom section with all content
-    if (extractedSections.length === 0) {
-      extractedSections.push({
-        id: "section-custom-0",
-        type: "custom",
-        title: "Resume Content",
-        content: templateHtml,
-        isLocked: false,
+  const handleSaveResume = async () => {
+    if (!user) {
+      toast({
+        title: "Please log in",
+        description: "You need to be logged in to save a resume",
       })
+      router.push("/login?redirect=/dashboard/resume-builder")
+      return
     }
 
-    setSections(extractedSections)
-  }, [templateHtml])
-
-  // Handle fullscreen changes
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement)
-    }
-
-    document.addEventListener("fullscreenchange", handleFullscreenChange)
-    return () => {
-      document.removeEventListener("fullscreenchange", handleFullscreenChange)
-    }
-  }, [])
-
-  // Update preview when sections change
-  useEffect(() => {
-    if (previewRef.current && mode === "preview") {
-      // Combine all sections into a single HTML document
-      const combinedHtml = sections.map((section) => section.content).join("")
-
-      previewRef.current.innerHTML = combinedHtml
-
-      // Apply CSS
-      if (templateCss) {
-        const styleElement = document.createElement("style")
-        styleElement.textContent = templateCss
-        previewRef.current.appendChild(styleElement)
-      }
-    }
-  }, [mode, sections, templateCss])
-
-  // Handle saving the resume
-  const handleSave = () => {
-    // Combine all sections into a single HTML document
-    const combinedHtml = sections.map((section) => section.content).join("")
-
-    onSave(combinedHtml)
-    setLastSaved(new Date())
-
-    toast({
-      title: "Resume Saved",
-      description: "Your resume has been saved successfully.",
-    })
-  }
-
-  // Handle zoom in/out
-  const handleZoomIn = () => {
-    setZoom(Math.min(zoom + 10, 200))
-  }
-
-  const handleZoomOut = () => {
-    setZoom(Math.max(zoom - 10, 50))
-  }
-
-  // Toggle fullscreen
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      containerRef.current?.requestFullscreen().catch((err) => {
-        console.error(`Error attempting to enable fullscreen: ${err.message}`)
-      })
-    } else {
-      document.exitFullscreen()
-    }
-  }
-
-  // Export to PDF
-  const exportToPdf = async () => {
+    setIsSaving(true)
     try {
-      const html2pdfModule = await import("html2pdf.js")
-      const html2pdf = html2pdfModule.default
-
-      // Combine all sections into a single HTML document
-      const combinedHtml = sections.map((section) => section.content).join("")
-
-      // Create a temporary div for the PDF content
-      const tempDiv = document.createElement("div")
-      tempDiv.innerHTML = combinedHtml
-
-      // Add CSS to the element
-      const style = document.createElement("style")
-      style.textContent = templateCss
-      tempDiv.appendChild(style)
-
-      const opt = {
-        margin: 10,
-        filename: "resume.pdf",
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2 },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      const resumeContent = {
+        personalInfo,
+        education,
+        experience,
+        skills,
+        summary,
       }
 
-      html2pdf().set(opt).from(tempDiv).save()
+      if (resumeId) {
+        // Update existing resume
+        const { error } = await supabase
+          .from("resumes")
+          .update({
+            title: resumeTitle,
+            content: resumeContent,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", resumeId)
+          .eq("user_id", user.id)
 
-      toast({
-        title: "PDF Exported",
-        description: "Your resume has been exported as a PDF.",
-      })
-    } catch (error) {
-      console.error("Error exporting to PDF:", error)
-      toast({
-        title: "Export Failed",
-        description: "Failed to export PDF. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
+        if (error) throw error
 
-  // Export to Word (DOCX)
-  const exportToWord = async () => {
-    try {
-      const fileSaverModule = await import("file-saver")
-      const saveAs = fileSaverModule.saveAs
-
-      // Combine all sections into a single HTML document
-      const combinedHtml = sections.map((section) => section.content).join("")
-
-      // Create a new Blob with HTML content
-      const preHtml = `<!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>Resume</title>
-            <style>
-              ${templateCss}
-              body {
-                font-family: Arial, sans-serif;
-              }
-            </style>
-          </head>
-          <body>`
-      const postHtml = `</body></html>`
-
-      const fullHtml = preHtml + combinedHtml + postHtml
-
-      const blob = new Blob([fullHtml], { type: "application/msword" })
-      saveAs(blob, "resume.doc")
-
-      toast({
-        title: "Word Document Exported",
-        description: "Your resume has been exported as a Word document.",
-      })
-    } catch (error) {
-      console.error("Error exporting to Word:", error)
-      toast({
-        title: "Export Failed",
-        description: "Failed to export Word document. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  // Generate AI content for a section
-  const generateAiContent = async () => {
-    if (!aiSection) return
-
-    setAiLoading(true)
-
-    try {
-      const section = sections.find((s) => s.id === aiSection)
-      if (!section) return
-
-      let generatedContent = ""
-
-      // Determine what type of content to generate based on the section type and prompt
-      if (section.type === "summary" || aiPrompt.toLowerCase().includes("summary")) {
-        // Find skills section to extract skills
-        const skillsSection = sections.find((s) => s.type === "skills")
-        const skills = skillsSection
-          ? skillsSection.content
-              .split(",")
-              .map((s) => s.replace(/<[^>]*>/g, "").trim())
-              .filter(Boolean)
-          : []
-
-        generatedContent = await generateSummary(section.content.replace(/<[^>]*>/g, ""), skills)
-      } else if (section.type === "skills" || aiPrompt.toLowerCase().includes("skills")) {
-        // Find experience section to extract job description
-        const expSection = sections.find((s) => s.type === "experience")
-        const jobDescription = expSection ? expSection.content.replace(/<[^>]*>/g, "") : ""
-
-        // Extract current skills
-        const currentSkills = section.content
-          .replace(/<[^>]*>/g, "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-
-        const suggestedSkills = await suggestSkills(jobDescription, currentSkills)
-        generatedContent = `<ul>${suggestedSkills.map((skill) => `<li>${skill}</li>`).join("")}</ul>`
-      } else if (section.type === "experience" || aiPrompt.toLowerCase().includes("achievements")) {
-        const achievements = await suggestAchievements(section.content.replace(/<[^>]*>/g, ""))
-        generatedContent = `<ul>${achievements.map((achievement) => `<li>${achievement}</li>`).join("")}</ul>`
+        toast({
+          title: "Resume updated",
+          description: "Your resume has been updated successfully",
+        })
       } else {
-        // Generic content generation
-        generatedContent = await generateSummary(section.content.replace(/<[^>]*>/g, ""), [])
-      }
+        // Create new resume
+        const { data, error } = await supabase
+          .from("resumes")
+          .insert({
+            user_id: user.id,
+            title: resumeTitle,
+            content: resumeContent,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            status: "draft",
+            payment_status: "unpaid",
+          })
+          .select()
 
-      // Update the section with the generated content
-      if (generatedContent) {
-        setSections(sections.map((s) => (s.id === aiSection ? { ...s, content: generatedContent } : s)))
-      }
+        if (error) throw error
 
-      toast({
-        title: "Content Generated",
-        description: "AI-generated content has been added to your resume.",
-      })
+        // Redirect to the edit page for the new resume
+        router.push(`/dashboard/resume-builder?id=${data[0].id}`)
+
+        toast({
+          title: "Resume created",
+          description: "Your resume has been created successfully",
+        })
+      }
     } catch (error) {
-      console.error("Error generating AI content:", error)
+      console.error("Error saving resume:", error)
       toast({
-        title: "Generation Failed",
-        description: "Failed to generate content. Please try again.",
         variant: "destructive",
+        title: "Error",
+        description: "Failed to save resume. Please try again.",
       })
     } finally {
-      setAiLoading(false)
-      setAiDialogOpen(false)
+      setIsSaving(false)
     }
   }
 
-  // Handle editing a section
-  const handleEditSection = (sectionId: string) => {
-    const section = sections.find((s) => s.id === sectionId)
-    if (!section) return
-
-    setEditingSection(sectionId)
-    setEditContent(section.content)
-  }
-
-  // Save edited section content
-  const saveEditedSection = () => {
-    if (!editingSection) return
-
-    setSections(
-      sections.map((section) => (section.id === editingSection ? { ...section, content: editContent } : section)),
-    )
-
-    setEditingSection(null)
-    setEditContent("")
-  }
-
-  // Toggle section lock
-  const toggleSectionLock = (sectionId: string) => {
-    setSections(
-      sections.map((section) => (section.id === sectionId ? { ...section, isLocked: !section.isLocked } : section)),
-    )
-  }
-
-  // Open AI dialog for a section
-  const openAiDialog = (sectionId: string) => {
-    const section = sections.find((s) => s.id === sectionId)
-    if (!section) return
-
-    setAiSection(sectionId)
-
-    // Set default prompt based on section type
-    let defaultPrompt = "Generate professional content for this section."
-
-    switch (section.type) {
-      case "summary":
-        defaultPrompt = "Generate a professional summary highlighting my skills and experience."
-        break
-      case "experience":
-        defaultPrompt = "Generate professional achievements for my work experience."
-        break
-      case "education":
-        defaultPrompt = "Format my education details professionally."
-        break
-      case "skills":
-        defaultPrompt = "Suggest relevant professional skills for my resume."
-        break
+  const handleExportResume = async () => {
+    if (!user) {
+      toast({
+        title: "Please log in",
+        description: "You need to be logged in to export a resume",
+      })
+      router.push("/login?redirect=/dashboard/resume-builder")
+      return
     }
 
-    setAiPrompt(defaultPrompt)
-    setAiDialogOpen(true)
+    if (!resumeId) {
+      // Save the resume first
+      toast({
+        title: "Save required",
+        description: "Please save your resume before exporting",
+      })
+      return
+    }
+
+    // Check if user can download the resume based on their plan
+    const resumePrice = calculateResumePrice()
+    const resumeLimit = getFeatureLimit("resumeDownload")
+    const resumeUsage = getFeatureUsage("resumeDownload")
+
+    if (resumePrice > 0) {
+      // Free user needs to pay per resume
+      router.push(`/payment?resumeId=${resumeId}`)
+      return
+    } else if (resumeUsage >= resumeLimit && resumeLimit !== Number.POSITIVE_INFINITY) {
+      // Premium user has reached their limit
+      toast({
+        variant: "destructive",
+        title: "Download limit reached",
+        description: "You have reached your resume download limit. Please upgrade your plan to download more resumes.",
+      })
+      return
+    }
+
+    // If we get here, the user can download the resume
+    // Redirect to the download page
+    router.push(`/dashboard/resume-builder/download?id=${resumeId}`)
+  }
+
+  const addEducation = () => {
+    setEducation([
+      ...education,
+      {
+        school: "",
+        degree: "",
+        fieldOfStudy: "",
+        startDate: "",
+        endDate: "",
+        description: "",
+      },
+    ])
+  }
+
+  const removeEducation = (index: number) => {
+    setEducation(education.filter((_, i) => i !== index))
+  }
+
+  const updateEducation = (index: number, field: keyof Education, value: string) => {
+    const updatedEducation = [...education]
+    updatedEducation[index] = { ...updatedEducation[index], [field]: value }
+    setEducation(updatedEducation)
+  }
+
+  const addExperience = () => {
+    setExperience([
+      ...experience,
+      {
+        company: "",
+        position: "",
+        location: "",
+        startDate: "",
+        endDate: "",
+        description: "",
+      },
+    ])
+  }
+
+  const removeExperience = (index: number) => {
+    setExperience(experience.filter((_, i) => i !== index))
+  }
+
+  const updateExperience = (index: number, field: keyof Experience, value: string) => {
+    const updatedExperience = [...experience]
+    updatedExperience[index] = { ...updatedExperience[index], [field]: value }
+    setExperience(updatedExperience)
+  }
+
+  const addSkill = () => {
+    setSkills([...skills, { name: "", level: "Intermediate" }])
+  }
+
+  const removeSkill = (index: number) => {
+    setSkills(skills.filter((_, i) => i !== index))
+  }
+
+  const updateSkill = (index: number, field: keyof Skill, value: string) => {
+    const updatedSkills = [...skills]
+    updatedSkills[index] = { ...updatedSkills[index], [field]: value }
+    setSkills(updatedSkills)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[600px] items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+          <p className="mt-2 text-sm text-muted-foreground">Loading resume data...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div ref={containerRef} className="flex flex-col h-full">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-2">
-          <Tabs value={mode} onValueChange={(value) => setMode(value as "edit" | "preview")}>
-            <TabsList>
-              <TabsTrigger value="edit">
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </TabsTrigger>
-              <TabsTrigger value="preview">
-                <Eye className="h-4 w-4 mr-2" />
-                Preview
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          {lastSaved && (
-            <span className="text-xs text-muted-foreground ml-4">Last saved: {lastSaved.toLocaleTimeString()}</span>
-          )}
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <Input
+            value={resumeTitle}
+            onChange={(e) => setResumeTitle(e.target.value)}
+            className="text-2xl font-bold border-none px-0 text-3xl h-auto focus-visible:ring-0"
+            placeholder="Resume Title"
+          />
+          <p className="text-sm text-muted-foreground">Fill in the sections below to create your professional resume</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Sparkles className="h-4 w-4 mr-2" />
-                AI Assist
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Generate AI Content</DialogTitle>
-                <DialogDescription>Use AI to generate professional content for your resume.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="prompt">What would you like to generate?</Label>
-                  <Textarea
-                    id="prompt"
-                    placeholder="E.g., Generate a professional summary highlighting my skills in marketing and design"
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    className="min-h-[100px]"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setAiDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={generateAiContent} disabled={aiLoading}>
-                  {aiLoading ? (
-                    <>
-                      <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Generate
-                    </>
-                  )}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={exportToPdf}>
-                <FileIcon className="h-4 w-4 mr-2" />
-                Export as PDF
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToWord}>
-                <FileIcon className="h-4 w-4 mr-2" />
-                Export as Word
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Button variant="outline" onClick={toggleFullscreen}>
-            {isFullscreen ? (
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleSaveResume} disabled={isSaving}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save
+          </Button>
+          <Button onClick={handleExportResume}>
+            {calculateResumePrice() > 0 ? (
               <>
-                <Minimize className="h-4 w-4 mr-2" />
-                Exit Fullscreen
+                <ArrowRight className="mr-2 h-4 w-4" />
+                Proceed to Payment (${calculateResumePrice()})
               </>
             ) : (
               <>
-                <Maximize className="h-4 w-4 mr-2" />
-                Fullscreen
+                <Download className="mr-2 h-4 w-4" />
+                Download Resume
               </>
             )}
-          </Button>
-
-          <Button onClick={handleSave}>
-            <Save className="h-4 w-4 mr-2" />
-            Save & Continue
           </Button>
         </div>
       </div>
 
-      <div className="flex-1 relative">
-        {mode === "edit" ? (
-          <div className="h-full flex flex-col">
-            <div className="flex-1 overflow-auto bg-gray-100 p-8 flex justify-center">
-              <div
-                style={{
-                  transform: `scale(${zoom / 100})`,
-                  transformOrigin: "top center",
-                  width: "210mm", // A4 width
-                  minHeight: "297mm", // A4 height
-                  padding: "20mm",
-                  backgroundColor: "white",
-                  boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-                  transition: "transform 0.2s ease",
-                }}
-                className="resume-page"
-              >
-                <div ref={editorRef} className="h-full">
-                  {/* Section editing dialog */}
-                  <Dialog
-                    open={!!editingSection}
-                    onOpenChange={(open) => {
-                      if (!open) {
-                        setEditingSection(null)
-                        setEditContent("")
-                      }
-                    }}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="personal-info">Personal Info</TabsTrigger>
+          <TabsTrigger value="summary">Summary</TabsTrigger>
+          <TabsTrigger value="experience">Experience</TabsTrigger>
+          <TabsTrigger value="education">Education</TabsTrigger>
+          <TabsTrigger value="skills">Skills</TabsTrigger>
+        </TabsList>
+
+        {/* Personal Info Section */}
+        <TabsContent value="personal-info" className="space-y-4 pt-4">
+          <div className="space-y-4 rounded-lg border p-4">
+            <h3 className="text-lg font-medium">Personal Information</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="fullName">Full Name</Label>
+                <Input
+                  id="fullName"
+                  value={personalInfo.fullName}
+                  onChange={(e) => setPersonalInfo({ ...personalInfo, fullName: e.target.value })}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={personalInfo.email}
+                  onChange={(e) => setPersonalInfo({ ...personalInfo, email: e.target.value })}
+                  placeholder="john.doe@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input
+                  id="phone"
+                  value={personalInfo.phone}
+                  onChange={(e) => setPersonalInfo({ ...personalInfo, phone: e.target.value })}
+                  placeholder="+1 (555) 123-4567"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="address">Address</Label>
+                <Input
+                  id="address"
+                  value={personalInfo.address}
+                  onChange={(e) => setPersonalInfo({ ...personalInfo, address: e.target.value })}
+                  placeholder="123 Main St, City, Country"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="linkedin">LinkedIn (Optional)</Label>
+                <Input
+                  id="linkedin"
+                  value={personalInfo.linkedin || ""}
+                  onChange={(e) => setPersonalInfo({ ...personalInfo, linkedin: e.target.value })}
+                  placeholder="linkedin.com/in/johndoe"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="website">Website (Optional)</Label>
+                <Input
+                  id="website"
+                  value={personalInfo.website || ""}
+                  onChange={(e) => setPersonalInfo({ ...personalInfo, website: e.target.value })}
+                  placeholder="johndoe.com"
+                />
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Summary Section */}
+        <TabsContent value="summary" className="space-y-4 pt-4">
+          <div className="space-y-4 rounded-lg border p-4">
+            <h3 className="text-lg font-medium">Professional Summary</h3>
+            <div className="space-y-2">
+              <Label htmlFor="summary">Write a brief summary of your professional background and goals</Label>
+              <Textarea
+                id="summary"
+                value={summary}
+                onChange={(e) => setSummary(e.target.value)}
+                placeholder="Experienced software developer with 5+ years of experience in web development..."
+                rows={6}
+              />
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Experience Section */}
+        <TabsContent value="experience" className="space-y-4 pt-4">
+          {experience.map((exp, index) => (
+            <div key={index} className="space-y-4 rounded-lg border p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium">Work Experience {index + 1}</h3>
+                {experience.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeExperience(index)}
+                    className="text-destructive hover:text-destructive"
                   >
-                    <DialogContent className="max-w-4xl">
-                      <DialogHeader>
-                        <DialogTitle>
-                          Edit {sections.find((s) => s.id === editingSection)?.title || "Section"}
-                        </DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                          <Textarea
-                            value={editContent}
-                            onChange={(e) => setEditContent(e.target.value)}
-                            className="min-h-[300px] font-mono text-sm"
-                          />
-                          <p className="text-xs text-muted-foreground">You can use HTML tags to format your content.</p>
-                        </div>
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setEditingSection(null)}>
-                          Cancel
-                        </Button>
-                        <Button onClick={saveEditedSection}>Save Changes</Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* Sections */}
-                  <div className="space-y-6">
-                    {sections.map((section) => (
-                      <div
-                        key={section.id}
-                        className={cn(
-                          "relative border rounded-md p-4 transition-all",
-                          section.isLocked ? "bg-gray-50" : "hover:border-primary",
-                        )}
-                      >
-                        <div className="absolute top-2 right-2 flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => toggleSectionLock(section.id)}
-                            title={section.isLocked ? "Unlock Section" : "Lock Section"}
-                          >
-                            {section.isLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => openAiDialog(section.id)}
-                            title="Generate AI Content"
-                          >
-                            <Sparkles className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => handleEditSection(section.id)}
-                            disabled={section.isLocked}
-                            title="Edit Section"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <h3 className="text-sm font-medium text-muted-foreground mb-2">{section.title}</h3>
-
-                        <div
-                          className={cn("section-content", section.isLocked && "opacity-75")}
-                          dangerouslySetInnerHTML={{ __html: section.content }}
-                        />
-                      </div>
-                    ))}
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor={`company-${index}`}>Company</Label>
+                  <Input
+                    id={`company-${index}`}
+                    value={exp.company}
+                    onChange={(e) => updateExperience(index, "company", e.target.value)}
+                    placeholder="Company Name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`position-${index}`}>Position</Label>
+                  <Input
+                    id={`position-${index}`}
+                    value={exp.position}
+                    onChange={(e) => updateExperience(index, "position", e.target.value)}
+                    placeholder="Job Title"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`location-${index}`}>Location</Label>
+                  <Input
+                    id={`location-${index}`}
+                    value={exp.location}
+                    onChange={(e) => updateExperience(index, "location", e.target.value)}
+                    placeholder="City, Country"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor={`startDate-${index}`}>Start Date</Label>
+                    <Input
+                      id={`startDate-${index}`}
+                      type="month"
+                      value={exp.startDate}
+                      onChange={(e) => updateExperience(index, "startDate", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`endDate-${index}`}>End Date</Label>
+                    <Input
+                      id={`endDate-${index}`}
+                      type="month"
+                      value={exp.endDate}
+                      onChange={(e) => updateExperience(index, "endDate", e.target.value)}
+                      placeholder="Present"
+                    />
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="flex justify-center items-center gap-4 p-2 bg-muted rounded-b-md">
-              <Button variant="outline" size="sm" onClick={handleZoomOut} disabled={zoom <= 50}>
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              <div className="w-32">
-                <Slider value={[zoom]} min={50} max={200} step={10} onValueChange={(value) => setZoom(value[0])} />
+              <div className="space-y-2">
+                <Label htmlFor={`description-${index}`}>Description</Label>
+                <Textarea
+                  id={`description-${index}`}
+                  value={exp.description}
+                  onChange={(e) => updateExperience(index, "description", e.target.value)}
+                  placeholder="Describe your responsibilities and achievements..."
+                  rows={4}
+                />
               </div>
-              <Button variant="outline" size="sm" onClick={handleZoomIn} disabled={zoom >= 200}>
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-              <span className="text-sm">{zoom}%</span>
             </div>
+          ))}
+          <Button variant="outline" onClick={addExperience} className="w-full">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Experience
+          </Button>
+        </TabsContent>
+
+        {/* Education Section */}
+        <TabsContent value="education" className="space-y-4 pt-4">
+          {education.map((edu, index) => (
+            <div key={index} className="space-y-4 rounded-lg border p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-medium">Education {index + 1}</h3>
+                {education.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeEducation(index)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor={`school-${index}`}>School</Label>
+                  <Input
+                    id={`school-${index}`}
+                    value={edu.school}
+                    onChange={(e) => updateEducation(index, "school", e.target.value)}
+                    placeholder="University Name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`degree-${index}`}>Degree</Label>
+                  <Input
+                    id={`degree-${index}`}
+                    value={edu.degree}
+                    onChange={(e) => updateEducation(index, "degree", e.target.value)}
+                    placeholder="Bachelor of Science"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`fieldOfStudy-${index}`}>Field of Study</Label>
+                  <Input
+                    id={`fieldOfStudy-${index}`}
+                    value={edu.fieldOfStudy}
+                    onChange={(e) => updateEducation(index, "fieldOfStudy", e.target.value)}
+                    placeholder="Computer Science"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor={`eduStartDate-${index}`}>Start Date</Label>
+                    <Input
+                      id={`eduStartDate-${index}`}
+                      type="month"
+                      value={edu.startDate}
+                      onChange={(e) => updateEducation(index, "startDate", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`eduEndDate-${index}`}>End Date</Label>
+                    <Input
+                      id={`eduEndDate-${index}`}
+                      type="month"
+                      value={edu.endDate}
+                      onChange={(e) => updateEducation(index, "endDate", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`eduDescription-${index}`}>Description (Optional)</Label>
+                <Textarea
+                  id={`eduDescription-${index}`}
+                  value={edu.description}
+                  onChange={(e) => updateEducation(index, "description", e.target.value)}
+                  placeholder="Relevant coursework, achievements, etc."
+                  rows={3}
+                />
+              </div>
+            </div>
+          ))}
+          <Button variant="outline" onClick={addEducation} className="w-full">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Education
+          </Button>
+        </TabsContent>
+
+        {/* Skills Section */}
+        <TabsContent value="skills" className="space-y-4 pt-4">
+          <div className="space-y-4 rounded-lg border p-4">
+            <h3 className="text-lg font-medium">Skills</h3>
+            {skills.map((skill, index) => (
+              <div key={index} className="flex items-center gap-4">
+                <div className="flex-1">
+                  <Input
+                    value={skill.name}
+                    onChange={(e) => updateSkill(index, "name", e.target.value)}
+                    placeholder="Skill name (e.g., JavaScript, Project Management)"
+                  />
+                </div>
+                <div className="w-40">
+                  <select
+                    value={skill.level}
+                    onChange={(e) => updateSkill(index, "level", e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                    <option value="Expert">Expert</option>
+                  </select>
+                </div>
+                {skills.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeSkill(index)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+            <Button variant="outline" onClick={addSkill} className="w-full mt-2">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Skill
+            </Button>
           </div>
-        ) : (
-          <Card className="h-full">
-            <CardContent className="p-8 h-full overflow-auto">
-              <div ref={previewRef} className="min-h-[800px]" />
-            </CardContent>
-          </Card>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
-
-export default StructuredResumeBuilder

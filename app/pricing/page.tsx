@@ -26,34 +26,31 @@ export default function PricingPage() {
           title: "Please log in",
           description: "You need to be logged in to select a plan",
         })
-        router.push("/login")
+        router.push("/login?redirect=/pricing")
         return
       }
 
-      // Update user's subscription tier in the database
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          subscription_tier: plan,
-          subscription_status: "active",
-          subscription_start_date: new Date().toISOString(),
-          subscription_end_date: new Date(
-            billingInterval === "yearly"
-              ? Date.now() + 365 * 24 * 60 * 60 * 1000
-              : Date.now() + 30 * 24 * 60 * 60 * 1000,
-          ).toISOString(),
-        })
-        .eq("id", user.id)
+      // For free plan, just show success and redirect to dashboard
+      if (plan === "free") {
+        // Update user's subscription tier in the database
+        const { error } = await supabase
+          .from("profiles")
+          .update({
+            subscription_tier: plan,
+            subscription_status: "active",
+            subscription_start_date: new Date().toISOString(),
+            subscription_end_date: new Date(
+              billingInterval === "yearly"
+                ? Date.now() + 365 * 24 * 60 * 60 * 1000
+                : Date.now() + 30 * 24 * 60 * 60 * 1000,
+            ).toISOString(),
+          })
+          .eq("id", user.id)
 
-      if (error) {
-        throw error
-      }
+        if (error) {
+          throw error
+        }
 
-      // If it's a paid plan, redirect to payment page
-      if (plan !== "free") {
-        router.push(`/payment?plan=${plan}&interval=${billingInterval}`)
-      } else {
-        // For free plan, just show success and redirect to dashboard
         toast({
           title: "Plan selected!",
           description: "You've successfully selected the Free plan.",
@@ -61,6 +58,9 @@ export default function PricingPage() {
 
         await refreshUser()
         router.push("/dashboard")
+      } else {
+        // For paid plans, redirect to payment page
+        router.push(`/payment?plan=${plan}&interval=${billingInterval}`)
       }
     } catch (error) {
       console.error("Error selecting plan:", error)
@@ -86,7 +86,7 @@ export default function PricingPage() {
       <div className="mt-8 flex justify-center">
         <Tabs
           defaultValue="monthly"
-          className="w-full max-w-3xl"
+          className="w-full max-w-5xl"
           onValueChange={(v) => setBillingInterval(v as "monthly" | "yearly")}
         >
           <div className="flex justify-center">
@@ -96,7 +96,7 @@ export default function PricingPage() {
             </TabsList>
           </div>
           <TabsContent value="monthly" className="mt-6">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               {/* Free Plan */}
               <Card>
                 <CardHeader>
@@ -108,19 +108,23 @@ export default function PricingPage() {
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>5 Free AI-Generated Cover Letters (One-Time)</span>
+                      <span>5 Free AI-Generated Cover Letters</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>One-Time Resume/CV Download (KES 500)</span>
+                      <span>Resumes cost $5 each</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Basic ATS Score (No Fixes)</span>
+                      <span>ATS Optimizer (Locked)</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Job Board (Read-Only)</span>
+                      <span>Interview Prep (Locked)</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Job Board (Public Jobs Only)</span>
                     </li>
                   </ul>
                 </CardContent>
@@ -132,38 +136,35 @@ export default function PricingPage() {
               </Card>
 
               {/* Premium Plan */}
-              <Card className="border-primary">
+              <Card>
                 <CardHeader>
-                  <div className="bg-primary text-primary-foreground text-xs font-medium px-2 py-1 rounded-full w-fit mb-2">
-                    MOST POPULAR
-                  </div>
                   <CardTitle>Premium Plan</CardTitle>
-                  <CardDescription>Maximum value for job seekers</CardDescription>
+                  <CardDescription>Great value for job seekers</CardDescription>
                   <div className="mt-4 text-3xl font-bold">
-                    KES 2,000<span className="text-sm font-normal text-muted-foreground">/month</span>
+                    $15<span className="text-sm font-normal text-muted-foreground">/month</span>
                   </div>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Unlimited AI-Generated Cover Letters</span>
+                      <span>10 AI-Generated Cover Letters/month</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Full ATS Optimization (Not Just Scores)</span>
+                      <span>5 Resume Downloads/month</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>10 Resume/CV Downloads (All Templates)</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Priority Job Board Access</span>
+                      <span>Full ATS Optimization</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
                       <span>AI Interview Prep Tool</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Job Board (Public + Private Jobs)</span>
                     </li>
                   </ul>
                 </CardContent>
@@ -179,13 +180,61 @@ export default function PricingPage() {
                 </CardFooter>
               </Card>
 
+              {/* Professional Plan */}
+              <Card className="border-primary">
+                <CardHeader>
+                  <div className="bg-primary text-primary-foreground text-xs font-medium px-2 py-1 rounded-full w-fit mb-2">
+                    MOST POPULAR
+                  </div>
+                  <CardTitle>Professional Plan</CardTitle>
+                  <CardDescription>Unlimited access for serious job seekers</CardDescription>
+                  <div className="mt-4 text-3xl font-bold">
+                    $25<span className="text-sm font-normal text-muted-foreground">/month</span>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Unlimited AI-Generated Cover Letters</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Unlimited Resume Downloads</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Advanced ATS Optimization</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Premium Interview Prep Tool</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Full Job Board Access</span>
+                    </li>
+                  </ul>
+                </CardContent>
+                <CardFooter>
+                  <Button
+                    className="w-full"
+                    variant="default"
+                    onClick={() => handleSelectPlan("professional")}
+                    disabled={isLoading !== null}
+                  >
+                    {isLoading === "professional" ? "Processing..." : "Select Professional Plan"}
+                  </Button>
+                </CardFooter>
+              </Card>
+
               {/* Corporate Plan */}
               <Card>
                 <CardHeader>
                   <CardTitle>Corporate Plan</CardTitle>
                   <CardDescription>For employers & recruiters</CardDescription>
                   <div className="mt-4 text-3xl font-bold">
-                    KES 15,000<span className="text-sm font-normal text-muted-foreground">/month</span>
+                    $150<span className="text-sm font-normal text-muted-foreground">/month</span>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -226,7 +275,7 @@ export default function PricingPage() {
             </div>
           </TabsContent>
           <TabsContent value="yearly" className="mt-6">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
               {/* Free Plan */}
               <Card>
                 <CardHeader>
@@ -238,19 +287,23 @@ export default function PricingPage() {
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>5 Free AI-Generated Cover Letters (One-Time)</span>
+                      <span>5 Free AI-Generated Cover Letters</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>One-Time Resume/CV Download (KES 500)</span>
+                      <span>Resumes cost $5 each</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Basic ATS Score (No Fixes)</span>
+                      <span>ATS Optimizer (Locked)</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Job Board (Read-Only)</span>
+                      <span>Interview Prep (Locked)</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Job Board (Public Jobs Only)</span>
                     </li>
                   </ul>
                 </CardContent>
@@ -262,39 +315,36 @@ export default function PricingPage() {
               </Card>
 
               {/* Premium Plan */}
-              <Card className="border-primary">
+              <Card>
                 <CardHeader>
-                  <div className="bg-primary text-primary-foreground text-xs font-medium px-2 py-1 rounded-full w-fit mb-2">
-                    BEST VALUE
-                  </div>
                   <CardTitle>Premium Plan</CardTitle>
-                  <CardDescription>Maximum value for job seekers</CardDescription>
+                  <CardDescription>Great value for job seekers</CardDescription>
                   <div className="mt-4 text-3xl font-bold">
-                    KES 16,800<span className="text-sm font-normal text-muted-foreground">/year</span>
+                    $126<span className="text-sm font-normal text-muted-foreground">/year</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">Save KES 7,200 compared to monthly</p>
+                  <p className="text-sm text-muted-foreground mt-1">Save $54 compared to monthly</p>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Unlimited AI-Generated Cover Letters</span>
+                      <span>10 AI-Generated Cover Letters/month</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Full ATS Optimization (Not Just Scores)</span>
+                      <span>5 Resume Downloads/month</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>10 Resume/CV Downloads (All Templates)</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
-                      <span>Priority Job Board Access</span>
+                      <span>Full ATS Optimization</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
                       <span>AI Interview Prep Tool</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Job Board (Public + Private Jobs)</span>
                     </li>
                   </ul>
                 </CardContent>
@@ -310,15 +360,64 @@ export default function PricingPage() {
                 </CardFooter>
               </Card>
 
+              {/* Professional Plan */}
+              <Card className="border-primary">
+                <CardHeader>
+                  <div className="bg-primary text-primary-foreground text-xs font-medium px-2 py-1 rounded-full w-fit mb-2">
+                    BEST VALUE
+                  </div>
+                  <CardTitle>Professional Plan</CardTitle>
+                  <CardDescription>Unlimited access for serious job seekers</CardDescription>
+                  <div className="mt-4 text-3xl font-bold">
+                    $210<span className="text-sm font-normal text-muted-foreground">/year</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">Save $90 compared to monthly</p>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Unlimited AI-Generated Cover Letters</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Unlimited Resume Downloads</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Advanced ATS Optimization</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Premium Interview Prep Tool</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-green-500 mt-0.5" />
+                      <span>Full Job Board Access</span>
+                    </li>
+                  </ul>
+                </CardContent>
+                <CardFooter>
+                  <Button
+                    className="w-full"
+                    variant="default"
+                    onClick={() => handleSelectPlan("professional")}
+                    disabled={isLoading !== null}
+                  >
+                    {isLoading === "professional" ? "Processing..." : "Select Professional Plan"}
+                  </Button>
+                </CardFooter>
+              </Card>
+
               {/* Corporate Plan */}
               <Card>
                 <CardHeader>
                   <CardTitle>Corporate Plan</CardTitle>
                   <CardDescription>For employers & recruiters</CardDescription>
                   <div className="mt-4 text-3xl font-bold">
-                    KES 126,000<span className="text-sm font-normal text-muted-foreground">/year</span>
+                    $1,260<span className="text-sm font-normal text-muted-foreground">/year</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">Save KES 54,000 compared to monthly</p>
+                  <p className="text-sm text-muted-foreground mt-1">Save $540 compared to monthly</p>
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-2 text-sm">
@@ -364,9 +463,9 @@ export default function PricingPage() {
         <div className="flex items-start gap-2 max-w-2xl text-sm text-muted-foreground">
           <Info className="h-5 w-5 mt-0.5 flex-shrink-0" />
           <p>
-            All plans include access to our resume templates and job board. Premium and Corporate plans offer additional
-            features and benefits. You can upgrade, downgrade, or cancel your subscription at any time. For more
-            information, please contact our support team.
+            All plans include access to our resume templates and job board. Premium, Professional, and Corporate plans
+            offer additional features and benefits. You can upgrade, downgrade, or cancel your subscription at any time.
+            For more information, please contact our support team.
           </p>
         </div>
       </div>
