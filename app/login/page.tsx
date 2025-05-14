@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/use-toast"
 import { Facebook, Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useUser } from "@/contexts/user-context"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -26,6 +27,7 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const redirectPath = searchParams.get("redirect") || "/dashboard"
   const { toast } = useToast()
+  const { refreshUser } = useUser()
 
   // Check if already logged in
   useEffect(() => {
@@ -70,8 +72,11 @@ export default function LoginPage() {
         description: "Redirecting to dashboard...",
       })
 
-      // Force a hard navigation to ensure the context is refreshed
-      window.location.href = redirectPath
+      // Refresh user data in context
+      await refreshUser()
+
+      // Redirect to the specified path or dashboard
+      router.push(redirectPath)
     } catch (error: any) {
       console.error("Login error:", error)
       setLoginStatus({
@@ -98,7 +103,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}${redirectPath}`,
+          redirectTo: `${window.location.origin}/auth/callback?redirect=${redirectPath}`,
         },
       })
 

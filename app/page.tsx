@@ -7,15 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Check } from "lucide-react"
 
 export default function Home() {
-  const [currency, setCurrency] = useState<"USD" | "KES">("KES")
+  const [currency, setCurrency] = useState<"USD" | "KES">("USD")
 
   const exchangeRate = 130 // 1 USD = 130 KES (approximate)
 
-  const formatPrice = (kesPrice: number) => {
+  const formatPrice = (usdPrice: number) => {
     if (currency === "USD") {
-      return `$${Math.round(kesPrice / exchangeRate)}`
+      return `$${usdPrice}`
     } else {
-      return `KSh ${kesPrice.toLocaleString()}`
+      return `KSh ${Math.round(usdPrice * exchangeRate).toLocaleString()}`
     }
   }
 
@@ -213,7 +213,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 py-12 md:grid-cols-3">
+            <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 py-12 md:grid-cols-4">
               {/* Free Plan */}
               <div className="flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm">
                 <div className="p-6 pt-8">
@@ -225,23 +225,19 @@ export default function Home() {
                   <ul className="mt-6 space-y-3">
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>5 Free AI-Generated Cover Letters (One-Time)</span>
+                      <span>5 Free AI-Generated Cover Letters</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>One-Time Resume/CV Download ({formatPrice(500)})</span>
+                      <span>Resumes cost {formatPrice(5)} each</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Basic ATS Score (No Fixes)</span>
+                      <span>ATS Optimizer (Locked)</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Job Board (Read-Only)</span>
-                    </li>
-                    <li className="flex items-start">
-                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Access to all templates</span>
+                      <span>Job Board (Public Jobs Only)</span>
                     </li>
                   </ul>
                 </div>
@@ -253,18 +249,58 @@ export default function Home() {
               </div>
 
               {/* Premium Plan */}
+              <div className="flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm">
+                <div className="p-6 pt-8">
+                  <h3 className="text-2xl font-bold">Premium Plan</h3>
+                  <p className="mt-2 text-muted-foreground">Great value for job seekers</p>
+                  <div className="mt-4 flex items-baseline">
+                    <span className="text-3xl font-bold">{formatPrice(15)}</span>
+                    <span className="ml-1 text-sm text-muted-foreground">/month</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">or {formatPrice(126)}/year (save 30%)</p>
+                  <ul className="mt-6 space-y-3">
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
+                      <span>10 AI-Generated Cover Letters/month</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
+                      <span>5 Resume Downloads/month</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
+                      <span>Full ATS Optimization</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
+                      <span>AI Interview Prep Tool</span>
+                    </li>
+                    <li className="flex items-start">
+                      <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
+                      <span>Job Board (Public + Private Jobs)</span>
+                    </li>
+                  </ul>
+                </div>
+                <div className="flex flex-1 flex-col justify-end p-6 pt-0">
+                  <Link href="/signup">
+                    <Button className="w-full">Sign Up</Button>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Professional Plan */}
               <div className="relative flex flex-col rounded-lg border bg-card text-card-foreground shadow-sm">
                 <div className="absolute -top-4 left-0 right-0 mx-auto w-fit rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
                   Most Popular
                 </div>
                 <div className="p-6 pt-8">
-                  <h3 className="text-2xl font-bold">Premium Plan</h3>
-                  <p className="mt-2 text-muted-foreground">Maximum value for job seekers</p>
+                  <h3 className="text-2xl font-bold">Professional Plan</h3>
+                  <p className="mt-2 text-muted-foreground">Unlimited access for serious job seekers</p>
                   <div className="mt-4 flex items-baseline">
-                    <span className="text-3xl font-bold">{formatPrice(1000)}</span>
+                    <span className="text-3xl font-bold">{formatPrice(25)}</span>
                     <span className="ml-1 text-sm text-muted-foreground">/month</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">or {formatPrice(8000)}/year (save 30%)</p>
+                  <p className="text-sm text-muted-foreground mt-1">or {formatPrice(210)}/year (save 30%)</p>
                   <ul className="mt-6 space-y-3">
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
@@ -272,19 +308,19 @@ export default function Home() {
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Full ATS Optimization (Not Just Scores)</span>
+                      <span>Unlimited Resume Downloads</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>10 Resume/CV Downloads (All Templates)</span>
+                      <span>Advanced ATS Optimization</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>Priority Job Board Access</span>
+                      <span>Premium Interview Prep Tool</span>
                     </li>
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
-                      <span>AI Interview Prep Tool</span>
+                      <span>Full Job Board Access</span>
                     </li>
                   </ul>
                 </div>
@@ -301,10 +337,10 @@ export default function Home() {
                   <h3 className="text-2xl font-bold">Corporate Plan</h3>
                   <p className="mt-2 text-muted-foreground">For employers & recruiters</p>
                   <div className="mt-4 flex items-baseline">
-                    <span className="text-3xl font-bold">{formatPrice(15000)}</span>
+                    <span className="text-3xl font-bold">{formatPrice(150)}</span>
                     <span className="ml-1 text-sm text-muted-foreground">/month</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">or {formatPrice(120000)}/year (save 30%)</p>
+                  <p className="text-sm text-muted-foreground mt-1">or {formatPrice(1260)}/year (save 30%)</p>
                   <ul className="mt-6 space-y-3">
                     <li className="flex items-start">
                       <Check className="mr-2 h-5 w-5 text-primary mt-0.5" />
@@ -433,7 +469,7 @@ export default function Home() {
                 <h3 className="text-lg font-bold">Is CV Chap Chap really free to register?</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Yes, individual job seekers can register for free. You get 5 free AI-generated cover letters and pay
-                  only {formatPrice(500)} per resume download.
+                  only {formatPrice(5)} per resume download.
                 </p>
               </div>
               <div className="rounded-lg border bg-card p-6">
