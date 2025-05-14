@@ -27,7 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
 
 export default function PaymentPage() {
-  const { user, refreshUser } = useUser()
+  const { user, refreshUser, isPremium } = useUser()
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
@@ -39,7 +39,7 @@ export default function PaymentPage() {
   const [paymentError, setPaymentError] = useState<string | null>(null)
 
   // Get plan and interval from URL params
-  const plan = searchParams.get("plan") || "premium"
+  const plan = searchParams.get("plan") || (isPremium ? "corporate" : "premium")
   const interval = searchParams.get("interval") || "monthly"
 
   // Calculate amount based on plan and interval

@@ -28,7 +28,7 @@ import { useUser } from "@/contexts/user-context"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function Dashboard() {
-  const { user, profile, userStats, loading, canUseFeature } = useUser()
+  const { user, profile, userStats, loading, canUseFeature, isPremium, isCorporate, handleUpgradeClick } = useUser()
   const { toast } = useToast()
   const [recentResumes, setRecentResumes] = useState([])
   const [recentActivity, setRecentActivity] = useState([])
@@ -67,8 +67,6 @@ export default function Dashboard() {
   ])
 
   // Determine subscription tier
-  const isPremium = profile?.subscription_tier === "premium"
-  const isCorporate = profile?.subscription_tier === "corporate"
   const isFree = !isPremium && !isCorporate
 
   useEffect(() => {
@@ -213,13 +211,6 @@ export default function Dashboard() {
     }
   }
 
-  const handleUpgradeClick = () => {
-    toast({
-      title: "Upgrade Required",
-      description: "This feature is only available on Premium and Corporate plans.",
-    })
-  }
-
   if (loading || isLoading) {
     return (
       <DashboardLayout>
@@ -244,11 +235,9 @@ export default function Dashboard() {
               </p>
             </div>
             {isFree && (
-              <Button asChild>
-                <Link href="/pricing">
-                  <Crown className="mr-2 h-4 w-4" />
-                  Upgrade to Premium
-                </Link>
+              <Button onClick={handleUpgradeClick}>
+                <Crown className="mr-2 h-4 w-4" />
+                Upgrade to Premium
               </Button>
             )}
           </div>
@@ -272,8 +261,8 @@ export default function Dashboard() {
                       Upgrade to Premium for unlimited cover letters, full ATS optimization, and more.
                     </p>
                   </div>
-                  <Button asChild className="w-full md:w-auto">
-                    <Link href="/pricing">View Plans</Link>
+                  <Button onClick={handleUpgradeClick} className="w-full md:w-auto">
+                    Upgrade Now
                   </Button>
                 </div>
               </CardContent>
@@ -298,6 +287,11 @@ export default function Dashboard() {
                       Enjoy unlimited cover letters, full ATS optimization, and premium features.
                     </p>
                   </div>
+                  {userStats?.resumeDownloadsUsed >= 8 && (
+                    <Button onClick={handleUpgradeClick} className="w-full md:w-auto">
+                      Upgrade to Corporate
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -572,9 +566,7 @@ export default function Dashboard() {
                         Upgrade to Premium to access AI Interview Prep and practice with personalized interview
                         questions.
                       </p>
-                      <Button asChild>
-                        <Link href="/pricing">Upgrade Now</Link>
-                      </Button>
+                      <Button onClick={handleUpgradeClick}>Upgrade Now</Button>
                     </div>
                   ) : (
                     <div className="space-y-4 py-2">

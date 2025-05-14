@@ -2,9 +2,9 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,7 +23,24 @@ export default function LoginPage() {
     message?: string
   } | null>(null)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectPath = searchParams.get("redirect") || "/dashboard"
   const { toast } = useToast()
+
+  // Check if already logged in
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClientComponentClient()
+      const { data } = await supabase.auth.getSession()
+
+      if (data.session) {
+        // Already logged in, redirect to dashboard
+        router.push("/dashboard")
+      }
+    }
+
+    checkAuth()
+  }, [router])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,7 +71,7 @@ export default function LoginPage() {
       })
 
       // Force a hard navigation to ensure the context is refreshed
-      window.location.href = "/dashboard"
+      window.location.href = redirectPath
     } catch (error: any) {
       console.error("Login error:", error)
       setLoginStatus({
@@ -81,7 +98,7 @@ export default function LoginPage() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/dashboard`,
+          redirectTo: `${window.location.origin}${redirectPath}`,
         },
       })
 
@@ -171,7 +188,20 @@ export default function LoginPage() {
                     required
                   />
                 </div>
+
+                <div className="flex flex-col space-y-4 mt-6">
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Logging in...
+                      </>
+                    ) : (
+                      "Log In"
+                    )}
+                  </Button>
+                </div>
               </form>
+
               <div className="mt-6">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
@@ -208,22 +238,11 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col space-y-4 mt-6">
-                <Button type="submit" className="w-full" disabled={loading} onClick={handleEmailLogin}>
-                  {loading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Logging in...
-                    </>
-                  ) : (
-                    "Log In"
-                  )}
-                </Button>
-                <div className="text-center">
-                  <span className="text-sm text-muted-foreground">Don&apos;t have an account? </span>
-                  <Link href="/signup" className="text-sm text-primary underline-offset-4 hover:underline">
-                    Sign up
-                  </Link>
-                </div>
+              <div className="text-center mt-6">
+                <span className="text-sm text-muted-foreground">Don&apos;t have an account? </span>
+                <Link href="/signup" className="text-sm text-primary underline-offset-4 hover:underline">
+                  Sign up
+                </Link>
               </div>
             </CardContent>
           </Card>

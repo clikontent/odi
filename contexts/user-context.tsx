@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { supabase } from "@/lib/supabase"
 import type { User } from "@supabase/supabase-js"
 import type { Profile } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
 
 // Define user stats interface
 interface UserStats {
@@ -30,6 +31,7 @@ interface UserContextType {
   isPremium: boolean
   isCorporate: boolean
   isAdmin: boolean
+  handleUpgradeClick: () => void
 }
 
 // Create the context with a default value
@@ -47,6 +49,7 @@ const UserContext = createContext<UserContextType>({
   isPremium: false,
   isCorporate: false,
   isAdmin: false,
+  handleUpgradeClick: () => {},
 })
 
 // Custom hook to use the user context
@@ -59,11 +62,28 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
   const [userStats, setUserStats] = useState<UserStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
+  const router = useRouter()
 
   // Derived state for user roles
   const isPremium = profile?.subscription_tier === "premium" && profile?.subscription_status === "active"
   const isCorporate = profile?.subscription_tier === "corporate" && profile?.subscription_status === "active"
   const isAdmin = profile?.subscription_tier === "admin"
+
+  // Function to handle upgrade button clicks
+  const handleUpgradeClick = useCallback(() => {
+    if (!user) {
+      router.push("/login?redirect=/pricing")
+      return
+    }
+
+    if (isPremium) {
+      // Premium users upgrade to corporate
+      router.push("/payment?plan=corporate&interval=monthly")
+    } else {
+      // Free users upgrade to premium
+      router.push("/payment?plan=premium&interval=monthly")
+    }
+  }, [user, isPremium, router])
 
   // Function to fetch user stats
   const fetchUserStats = useCallback(async (userId: string) => {
@@ -130,6 +150,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         setUser(null)
         setProfile(null)
         setUserStats(null)
+        setLoading(false)
         return
       }
 
@@ -145,8 +166,33 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
             .eq("id", sessionData.session.user.id)
             .single()
 
-          if (profileError) throw profileError
-          setProfile(profileData)
+          if (profileError) {
+            // If profile doesn't exist, create it
+            if (profileError.code === "PGRST116") {
+              const newProfile = {
+                id: sessionData.session.user.id,
+                email: sessionData.session.user.email,
+                full_name: sessionData.session.user.user_metadata?.full_name || "",
+                subscription_tier: "free",
+                subscription_status: "inactive",
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              }
+
+              const { data: createdProfile, error: createError } = await supabase
+                .from("profiles")
+                .insert(newProfile)
+                .select()
+                .single()
+
+              if (createError) throw createError
+              setProfile(createdProfile)
+            } else {
+              throw profileError
+            }
+          } else {
+            setProfile(profileData)
+          }
 
           // Fetch user stats
           const stats = await fetchUserStats(sessionData.session.user.id)
@@ -196,6 +242,9 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/")
       })
 
+      // Force reload to clear all state
+      window.location.href = "/"
+
       return true
     } catch (error) {
       console.error("Error signing out:", error)
@@ -209,7 +258,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       // Check if user can create more cover letters
-      if (profile?.subscription_tier === "free" && userStats.coverLettersUsed >= 5) {
+      if (!isPremium && !isCorporate && !isAdmin && userStats.coverLettersUsed >= 5) {
         return false
       }
 
@@ -232,7 +281,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error incrementing cover letter count:", error)
       return false
     }
-  }, [user, profile, userStats])
+  }, [user, userStats, isPremium, isCorporate, isAdmin])
 
   // Function to increment resume download count
   const incrementResumeDownloadCount = useCallback(async () => {
@@ -240,11 +289,11 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       // Check if user can download more resumes
-      if (profile?.subscription_tier === "free" && userStats.resumeDownloadsUsed >= 1) {
+      if (!isPremium && !isCorporate && !isAdmin && userStats.resumeDownloadsUsed >= 1) {
         return false
       }
 
-      if (profile?.subscription_tier === "premium" && userStats.resumeDownloadsUsed >= 10) {
+      if (isPremium && !isCorporate && !isAdmin && userStats.resumeDownloadsUsed >= 10) {
         return false
       }
 
@@ -267,38 +316,49 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       console.error("Error incrementing resume download count:", error)
       return false
     }
-  }, [user, profile, userStats])
+  }, [user, userStats, isPremium, isCorporate, isAdmin])
 
   // Function to check if user can use a feature
   const canUseFeature = useCallback(
     (feature: "coverLetter" | "resumeDownload" | "atsOptimization" | "interviewPrep") => {
       if (!profile || !userStats) return false
 
-      const tier = profile.subscription_tier || "free"
-      const isActive = profile.subscription_status === "active"
-
-      // Corporate and admin users can use all features
-      if ((tier === "corporate" || tier === "admin") && isActive) {
+      // Admin and corporate users can use all features
+      if (isAdmin || isCorporate) {
         return true
       }
 
+      // Premium users can use most features with some limits
+      if (isPremium) {
+        switch (feature) {
+          case "coverLetter":
+            return true // Unlimited for premium
+          case "resumeDownload":
+            return userStats.resumeDownloadsUsed < 10 // Limited to 10 for premium
+          case "atsOptimization":
+            return true // Available for premium
+          case "interviewPrep":
+            return true // Available for premium
+          default:
+            return false
+        }
+      }
+
+      // Free users have very limited access
       switch (feature) {
         case "coverLetter":
-          return tier === "premium" && isActive ? true : userStats.coverLettersUsed < 5
+          return userStats.coverLettersUsed < 5 // Limited to 5 for free
         case "resumeDownload":
-          return (
-            (tier === "premium" && isActive && userStats.resumeDownloadsUsed < 10) ||
-            (tier === "free" && userStats.resumeDownloadsUsed < 1)
-          )
+          return userStats.resumeDownloadsUsed < 1 // Limited to 1 for free
         case "atsOptimization":
-          return tier === "premium" && isActive
+          return false // Not available for free
         case "interviewPrep":
-          return tier === "premium" && isActive
+          return false // Not available for free
         default:
           return false
       }
     },
-    [profile, userStats],
+    [profile, userStats, isPremium, isCorporate, isAdmin],
   )
 
   // Set up auth state listener
@@ -308,26 +368,56 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     // Subscribe to auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        setUser(session.user)
-        // Fetch profile and stats when auth state changes
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", session.user.id)
-          .single()
-          .then(({ data }) => {
-            setProfile(data)
-            return fetchUserStats(session.user.id)
-          })
-          .then((stats) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event)
+
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        if (session) {
+          setUser(session.user)
+          // Fetch profile and stats when auth state changes
+          try {
+            const { data: profileData, error: profileError } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", session.user.id)
+              .single()
+
+            if (profileError) {
+              // If profile doesn't exist, create it
+              if (profileError.code === "PGRST116") {
+                const newProfile = {
+                  id: session.user.id,
+                  email: session.user.email,
+                  full_name: session.user.user_metadata?.full_name || "",
+                  subscription_tier: "free",
+                  subscription_status: "inactive",
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }
+
+                const { data: createdProfile, error: createError } = await supabase
+                  .from("profiles")
+                  .insert(newProfile)
+                  .select()
+                  .single()
+
+                if (createError) throw createError
+                setProfile(createdProfile)
+              } else {
+                throw profileError
+              }
+            } else {
+              setProfile(profileData)
+            }
+
+            // Fetch user stats
+            const stats = await fetchUserStats(session.user.id)
             setUserStats(stats)
-          })
-          .catch((error) => {
+          } catch (error) {
             console.error("Error fetching profile on auth change:", error)
-          })
-      } else {
+          }
+        }
+      } else if (event === "SIGNED_OUT") {
         setUser(null)
         setProfile(null)
         setUserStats(null)
@@ -355,6 +445,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     isPremium,
     isCorporate,
     isAdmin,
+    handleUpgradeClick,
   }
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>
