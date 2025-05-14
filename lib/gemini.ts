@@ -6,7 +6,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-const model = google("gemini-1.5-pro-latest", {
+// Updated to use Gemini 1.5 Flash
+const model = google("gemini-1.5-flash", {
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
 })
 
@@ -160,7 +161,11 @@ export async function analyzeResumeForJobMatch(
   }
 }
 
-export async function generateInterviewQuestions(jobTitle: string, jobDescription: string, userId?: string): Promise<string[]> {
+export async function generateInterviewQuestions(
+  jobTitle: string,
+  jobDescription: string,
+  userId?: string,
+): Promise<string[]> {
   try {
     const prompt = `
     Generate 5 likely interview questions and answers for a ${jobTitle} position based on this job description:
@@ -185,7 +190,6 @@ export async function generateInterviewQuestions(jobTitle: string, jobDescriptio
   }
 }
 
-// ✅ Updated: trackAIUsage uses named parameters
 export async function trackAIUsage({
   feature,
   tokensUsed,

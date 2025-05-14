@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DashboardLayout } from "@/components/dashboard-layout"
-import { AIDragDropResumeBuilder } from "@/components/ai-drag-drop-resume-builder"
-import { getResumeTemplates } from "@/lib/templates"
+import { PlaceholderResumeBuilder } from "@/components/placeholder-resume-builder"
+import { PlaceholderGuide } from "@/components/placeholder-guide"
 import { toast } from "@/components/ui/use-toast"
 import { Loader2 } from "lucide-react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
@@ -21,10 +19,8 @@ export default function ResumeBuilderPage() {
   const supabase = createClientComponentClient()
 
   const [loading, setLoading] = useState(true)
-  const [templates, setTemplates] = useState<any[]>([])
   const [resumeTitle, setResumeTitle] = useState("My Resume")
   const [resumeData, setResumeData] = useState<any | null>(null)
-  const [resumeHtml, setResumeHtml] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -36,12 +32,6 @@ export default function ResumeBuilderPage() {
         const { data: userData } = await supabase.auth.getUser()
         if (userData?.user) {
           setUserId(userData.user.id)
-        }
-
-        // Fetch templates
-        const templates = await getResumeTemplates()
-        if (templates && templates.length > 0) {
-          setTemplates(templates)
         }
 
         // If resumeId is provided, fetch the resume data
@@ -95,13 +85,6 @@ export default function ResumeBuilderPage() {
 
       // Use the templateId from the data
       const templateId = data.templateId
-
-      // Find the selected template
-      const selectedTemplate = templates.find((t) => t.id === templateId)
-
-      if (!selectedTemplate) {
-        throw new Error("Template not found")
-      }
 
       // Save to resumes table
       const { data: savedResume, error } = await supabase
@@ -162,32 +145,21 @@ export default function ResumeBuilderPage() {
             <h1 className="text-2xl font-bold tracking-tight">Resume Builder</h1>
             <p className="text-muted-foreground">Create and customize your professional resume</p>
           </div>
-          <div className="w-64">
-            <Label htmlFor="resumeTitle">Resume Title</Label>
-            <Input
-              id="resumeTitle"
-              value={resumeTitle}
-              onChange={(e) => setResumeTitle(e.target.value)}
-              className="mt-1"
-            />
+          <div className="flex items-end gap-4">
+            <div className="w-64">
+              <Label htmlFor="resumeTitle">Resume Title</Label>
+              <Input
+                id="resumeTitle"
+                value={resumeTitle}
+                onChange={(e) => setResumeTitle(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <PlaceholderGuide />
           </div>
         </div>
 
-        {templates.length > 0 ? (
-          <AIDragDropResumeBuilder initialData={resumeData} onSave={saveResume} templates={templates} />
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>No Templates Available</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>No resume templates are currently available. Please try again later.</p>
-              <Button variant="outline" onClick={() => window.location.reload()} className="mt-4">
-                Refresh
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+        <PlaceholderResumeBuilder initialData={resumeData} onSave={saveResume} />
       </div>
     </DashboardLayout>
   )

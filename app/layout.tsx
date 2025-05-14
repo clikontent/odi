@@ -3,16 +3,16 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { UserProvider } from "@/contexts/user-context"
-import { NotificationProvider } from "@/contexts/notification-context"
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/contexts/auth-provider"
+import { NotificationProvider } from "@/contexts/notification-context"
+import { TopNavigation } from "@/components/top-navigation"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "CV Chap Chap - Kenyan Resume Builder",
-  description: "Create professional resumes and cover letters in minutes",
+  title: "Kenyan Resume Builder",
+  description: "Create professional resumes and cover letters for the Kenyan job market",
     generator: 'v0.dev'
 }
 
@@ -24,16 +24,15 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <AuthProvider>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-            <UserProvider>
-              <NotificationProvider>
-                {children}
-                <Toaster />
-              </NotificationProvider>
-            </UserProvider>
-          </ThemeProvider>
-        </AuthProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <AuthProvider>
+            <NotificationProvider>
+              <TopNavigation />
+              {children}
+              <Toaster />
+            </NotificationProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
