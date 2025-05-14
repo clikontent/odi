@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { useUser } from "@/contexts/user-context"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -18,35 +17,90 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ModeToggle } from "@/components/mode-toggle"
 import { FileText, Folder, LayoutDashboard, LogOut, Menu, Settings, User, X } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { supabase } from "@/lib/supabase"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 export function Header() {
-  const { user, profile, signOut } = useUser()
   const pathname = usePathname()
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
-    const checkAuth = async () => {
+    async function checkAuth() {
       setIsLoading(true)
-      const { data } = await supabase.auth.getSession()
-      setIsLoading(false)
+      try {
+        // Get the current session
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession()
+
+        if (sessionError) throw sessionError
+
+        if (session) {
+          // Set the user from the session
+          setUser(session.user)
+
+          // Fetch the user profile
+          const { data: profileData, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", session.user.id)
+            .single()
+
+          if (profileError && profileError.code !== "PGRST116") {
+            console.error("Error fetching profile:", profileError)
+          }
+
+          if (profileData) {
+            setProfile(profileData)
+          }
+        }
+      } catch (error) {
+        console.error("Auth check error:", error)
+      } finally {
+        setIsLoading(false)
+      }
     }
 
     checkAuth()
-  }, [])
 
-  const isInternalPage =
-    pathname?.includes("/dashboard") ||
-    pathname?.includes("/admin") ||
-    pathname?.includes("/corporate") ||
-    pathname?.includes("/settings")
+    // Subscribe to auth changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        setUser(session.user)
+
+        // Fetch the user profile on sign in
+        const { data: profileData } = await supabase.from("profiles").select("*").eq("id", session.user.id).single()
+
+        if (profileData) {
+          setProfile(profileData)
+        }
+      } else if (event === "SIGNED_OUT") {
+        setUser(null)
+        setProfile(null)
+      }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [supabase, pathname])
 
   const handleSignOut = async () => {
     setIsLoading(true)
     try {
-      await signOut()
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+
+      // Clear user state
+      setUser(null)
+      setProfile(null)
+
+      // Redirect to home
       router.push("/")
     } catch (error) {
       console.error("Error signing out:", error)
@@ -55,9 +109,29 @@ export function Header() {
     }
   }
 
-  // ✅ EARLY RETURN WHILE LOADING TO AVOID HYDRATION MISMATCH
-  if (isLoading) {
-    return null
+  const isInternalPage =
+    pathname?.includes("/dashboard") ||
+    pathname?.includes("/admin") ||
+    pathname?.includes("/corporate") ||
+    pathname?.includes("/settings")
+
+  // Don't render anything while initially loading to prevent flicker
+  if (isLoading && !user && !profile) {
+    return (
+      <header className="bg-background border-b sticky top-0 z-50">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between p-4 lg:px-8" aria-label="Global">
+          <div className="flex lg:flex-1">
+            <Link href="/" className="-m-1.5 p-1.5 flex items-center gap-2">
+              <FileText className="h-8 w-8 text-primary" />
+              <span className="font-bold text-xl">CV Chap Chap</span>
+            </Link>
+          </div>
+          <div className="flex items-center gap-4">
+            <ModeToggle />
+          </div>
+        </nav>
+      </header>
+    )
   }
 
   return (
@@ -119,10 +193,10 @@ export function Header() {
                         {profile?.full_name
                           ? profile.full_name
                               .split(" ")
-                              .map((n) => n[0])
+                              .map((n: string) => n[0])
                               .join("")
                               .toUpperCase()
-                          : "U"}
+                          : user?.email?.charAt(0).toUpperCase() || "U"}
                       </AvatarFallback>
                     </Avatar>
                   </Button>

@@ -5,7 +5,6 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/use-toast"
 import { Facebook, Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { useUser } from "@/contexts/user-context"
+import { useAuth } from "@/contexts/auth-provider"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -27,22 +26,14 @@ export default function LoginPage() {
   const searchParams = useSearchParams()
   const redirectPath = searchParams.get("redirect") || "/dashboard"
   const { toast } = useToast()
-  const { refreshUser } = useUser()
+  const { supabase, user, refreshUser } = useAuth()
 
   // Check if already logged in
   useEffect(() => {
-    const checkAuth = async () => {
-      const supabase = createClientComponentClient()
-      const { data } = await supabase.auth.getSession()
-
-      if (data.session) {
-        // Already logged in, redirect to dashboard
-        router.push("/dashboard")
-      }
+    if (user) {
+      router.push("/dashboard")
     }
-
-    checkAuth()
-  }, [router])
+  }, [user, router])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,9 +41,6 @@ export default function LoginPage() {
     setLoginStatus(null)
 
     try {
-      // Create a new Supabase client for the component
-      const supabase = createClientComponentClient()
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -97,8 +85,6 @@ export default function LoginPage() {
   const handleSocialLogin = async (provider: "google" | "facebook") => {
     try {
       setLoginStatus(null)
-      // Create a new Supabase client for the component
-      const supabase = createClientComponentClient()
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -123,6 +109,11 @@ export default function LoginPage() {
         description: error.message || "Failed to connect to authentication service",
       })
     }
+  }
+
+  // If already logged in, don't show the login form
+  if (user) {
+    return null
   }
 
   return (

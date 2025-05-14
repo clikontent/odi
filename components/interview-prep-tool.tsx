@@ -12,12 +12,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
 import { generateInterviewQuestions } from "@/lib/ai-integration-service"
 import type { InterviewQuestion, CoverLetterData, ResumeData } from "@/types/ai-tools"
+import { useAuth } from "@/contexts/auth-provider"
 
-interface InterviewPrepToolProps {
-  userId: string
-}
+export function InterviewPrepTool() {
+  const { user } = useAuth()
+  const userId = user?.id
 
-export function InterviewPrepTool({ userId }: InterviewPrepToolProps) {
   const [jobTitle, setJobTitle] = useState("")
   const [jobDescription, setJobDescription] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
@@ -30,39 +30,46 @@ export function InterviewPrepTool({ userId }: InterviewPrepToolProps) {
   const [activeTab, setActiveTab] = useState("questions")
   const [coverLetterText, setCoverLetterText] = useState("")
   const [resumeText, setResumeText] = useState("")
+  const [isLoadingDocuments, setIsLoadingDocuments] = useState(false)
+
+  const [hasFetchedDocuments, setHasFetchedDocuments] = useState(false)
 
   useEffect(() => {
-    async function fetchUserDocuments() {
-      try {
-        // Fetch cover letters
-        const { data: coverLettersData, error: coverLettersError } = await supabase
-          .from("cover_letters")
-          .select("id, title, content, created_at")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-
-        if (coverLettersError) throw coverLettersError
-        setCoverLetters(coverLettersData || [])
-
-        // Fetch resumes
-        const { data: resumesData, error: resumesError } = await supabase
-          .from("resumes")
-          .select("id, title, content, created_at")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-
-        if (resumesError) throw resumesError
-        setResumes(resumesData || [])
-      } catch (error) {
-        console.error("Error fetching user documents:", error)
-        setError("Failed to load your documents. Please try again.")
-      }
-    }
-
-    if (userId) {
+    if (userId && !hasFetchedDocuments) {
       fetchUserDocuments()
+      setHasFetchedDocuments(true)
     }
-  }, [userId])
+  }, [userId, hasFetchedDocuments])
+
+  async function fetchUserDocuments() {
+    setIsLoadingDocuments(true)
+    try {
+      // Fetch cover letters
+      const { data: coverLettersData, error: coverLettersError } = await supabase
+        .from("cover_letters")
+        .select("id, title, content, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+
+      if (coverLettersError) throw coverLettersError
+      setCoverLetters(coverLettersData || [])
+
+      // Fetch resumes
+      const { data: resumesData, error: resumesError } = await supabase
+        .from("resumes")
+        .select("id, title, content, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+
+      if (resumesError) throw resumesError
+      setResumes(resumesData || [])
+    } catch (error) {
+      console.error("Error fetching user documents:", error)
+      setError("Failed to load your documents. Please try again.")
+    } finally {
+      setIsLoadingDocuments(false)
+    }
+  }
 
   useEffect(() => {
     async function fetchCoverLetterContent() {
@@ -139,6 +146,20 @@ export function InterviewPrepTool({ userId }: InterviewPrepToolProps) {
     } finally {
       setIsGenerating(false)
     }
+  }
+
+  if (!userId) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Authentication Required</CardTitle>
+          <CardDescription>You need to be logged in to use this feature</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-center py-4">Please log in again to continue</p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
