@@ -2,37 +2,33 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/toaster"
-import { AuthProvider } from "@/contexts/auth-provider"
-import { NotificationProvider } from "@/contexts/notification-context"
-import { TopNavigation } from "@/components/top-navigation"
+import { AuthProvider } from "@/contexts/auth-context"
+import Navigation from "@/components/navigation"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Kenyan Resume Builder",
-  description: "Create professional resumes and cover letters for the Kenyan job market",
+  title: "CV Chap Chap - AI-Powered Job Search Assistant",
+  description:
+    "Transform your job search with AI-powered resume generation, application tracking, and interview preparation.",
+  keywords: "resume, job search, AI, interview preparation, career",
     generator: 'v0.dev'
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          <AuthProvider>
-            <NotificationProvider>
-              <TopNavigation />
-              {children}
-              <Toaster />
-            </NotificationProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <AuthProvider>
+          <div className="min-h-screen bg-gray-50">
+            <Navigation />
+            <main>{children}</main>
+          </div>
+        </AuthProvider>
       </body>
     </html>
   )

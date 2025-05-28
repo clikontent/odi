@@ -1,48 +1,102 @@
 import { createClient } from "@supabase/supabase-js"
-import type { Database } from "./database.types"
 
-// Initialize the Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Create the Supabase client
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+// Check if environment variables are properly configured
+const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey)
+
+// Create a mock client for when Supabase is not configured
+const createMockClient = () => ({
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+    signUp: async () => ({ data: null, error: new Error("Supabase not configured") }),
+    signInWithPassword: async () => ({ data: null, error: new Error("Supabase not configured") }),
+    signOut: async () => ({ error: new Error("Supabase not configured") }),
+    getUser: async () => ({ data: { user: null }, error: null }),
+    getSession: async () => ({ data: { session: null }, error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
   },
+  from: () => ({
+    select: () => ({
+      eq: () => ({
+        single: async () => ({ data: null, error: new Error("Supabase not configured") }),
+        order: () => ({
+          limit: async () => ({ data: [], error: null }),
+        }),
+      }),
+      order: () => ({
+        limit: async () => ({ data: [], error: null }),
+      }),
+    }),
+    insert: () => ({
+      select: () => ({
+        single: async () => ({ data: null, error: new Error("Supabase not configured") }),
+      }),
+    }),
+    update: () => ({
+      eq: async () => ({ error: new Error("Supabase not configured") }),
+    }),
+    delete: () => ({
+      eq: async () => ({ error: new Error("Supabase not configured") }),
+    }),
+  }),
+  rpc: async () => ({ error: new Error("Supabase not configured") }),
 })
 
-// Function to ensure storage buckets exist
-export async function ensureStorageBuckets() {
-  try {
-    // Check if buckets exist and create them if they don't
-    const { data: buckets, error } = await supabase.storage.listBuckets()
+// Create the Supabase client or mock client
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl!, supabaseAnonKey!)
+  : (createMockClient() as any)
 
-    const requiredBuckets = ["resumes", "cover-letters", "profile-images", "documents"]
-
-    for (const bucket of requiredBuckets) {
-      if (!buckets?.find((b) => b.name === bucket)) {
-        await supabase.storage.createBucket(bucket, {
-          public: false,
-        })
-      }
-    }
-  } catch (error) {
-    console.error("Error ensuring storage buckets:", error)
+// Auth helpers with error handling
+export const signUp = async (email: string, password: string, fullName: string) => {
+  if (!isSupabaseConfigured) {
+    return { data: null, error: new Error("Supabase is not configured. Please add environment variables.") }
   }
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+      },
+    },
+  })
+  return { data, error }
 }
 
-// Export types for convenience
-export type Profile = Database["public"]["Tables"]["profiles"]["Row"]
-export type ResumeTemplate = Database["public"]["Tables"]["resume_templates"]["Row"]
-export type CoverLetterTemplate = Database["public"]["Tables"]["cover_letter_templates"]["Row"]
-export type Resume = Database["public"]["Tables"]["resumes"]["Row"]
-export type CoverLetter = Database["public"]["Tables"]["cover_letters"]["Row"]
-export type JobApplication = Database["public"]["Tables"]["job_applications"]["Row"]
-export type UserFile = Database["public"]["Tables"]["user_files"]["Row"]
-export type Payment = Database["public"]["Tables"]["payments"]["Row"]
-export type Subscription = Database["public"]["Tables"]["subscriptions"]["Row"]
-export type ActivityLog = Database["public"]["Tables"]["activity_logs"]["Row"]
-export type Feedback = Database["public"]["Tables"]["feedback"]["Row"]
-export type AIUsage = Database["public"]["Tables"]["ai_usage"]["Row"]
+export const signIn = async (email: string, password: string) => {
+  if (!isSupabaseConfigured) {
+    return { data: null, error: new Error("Supabase is not configured. Please add environment variables.") }
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+  return { data, error }
+}
+
+export const signOut = async () => {
+  if (!isSupabaseConfigured) {
+    return { error: new Error("Supabase is not configured. Please add environment variables.") }
+  }
+
+  const { error } = await supabase.auth.signOut()
+  return { error }
+}
+
+export const getCurrentUser = async () => {
+  if (!isSupabaseConfigured) {
+    return null
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  return user
+}
+
+// Export configuration status
+export { isSupabaseConfigured }

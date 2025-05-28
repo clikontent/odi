@@ -1,668 +1,451 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
-import { DashboardLayout } from "@/components/dashboard-layout"
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { useAuth } from "@/contexts/auth-context"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  FileText,
-  PenTool,
-  FileCheck,
-  Briefcase,
-  Clock,
-  Plus,
-  Download,
-  Users,
-  TrendingUp,
-  MessageSquare,
-  Loader2,
-  Activity,
-  Lock,
-  Crown,
-} from "lucide-react"
-import { getActivityTimeline } from "@/lib/analytics"
-import { Progress } from "@/components/ui/progress"
-import { useUser } from "@/contexts/user-context"
-import { useToast } from "@/components/ui/use-toast"
-import { useRouter } from "next/navigation"
+import { FileText, MessageSquare, Zap, Briefcase, Search, Crown, Lock, Bell, Activity } from "lucide-react"
+import Link from "next/link"
+import { supabase } from "@/lib/supabase"
+import { getUserSubscription } from "@/lib/subscription"
 
-export default function Dashboard() {
-  const {
-    user,
-    profile,
-    userStats,
-    loading,
-    canUseFeature,
-    isPremium,
-    isProfessional,
-    isCorporate,
-    handleUpgradeClick,
-    getFeatureLimit,
-    getFeatureUsage,
-  } = useUser()
-  const { toast } = useToast()
-  const [recentResumes, setRecentResumes] = useState([])
-  const [recentActivity, setRecentActivity] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [stats, setStats] = useState({
-    totalResumes: 0,
-    totalCoverLetters: 0,
-    totalApplications: 0,
-    completionRate: 0,
+interface DashboardStats {
+  resumes: number
+  applications: number
+  coverLetters: number
+}
+
+interface CommunityPost {
+  id: string
+  title: string
+  content: string
+  post_type: string
+  is_pinned: boolean
+  created_at: string
+}
+
+interface UserActivity {
+  id: string
+  activity_type: string
+  description: string
+  created_at: string
+}
+
+export default function DashboardPage() {
+  const { user } = useAuth()
+  const [stats, setStats] = useState<DashboardStats>({
+    resumes: 0,
+    applications: 0,
+    coverLetters: 0,
   })
-  const [recentJobs, setRecentJobs] = useState([
+  const [subscription, setSubscription] = useState<any>(null)
+  const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([])
+  const [recentActivities, setRecentActivities] = useState<UserActivity[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (user) {
+      fetchDashboardData()
+    }
+  }, [user])
+
+  const fetchDashboardData = async () => {
+    try {
+      const [subData] = await Promise.all([getUserSubscription(user?.id || "")])
+
+      setSubscription(subData)
+
+      // Fetch stats
+      const [resumesResult, applicationsResult, coverLettersResult] = await Promise.all([
+        supabase.from("resumes").select("*", { count: "exact", head: true }).eq("user_id", user?.id),
+        supabase.from("job_applications").select("*", { count: "exact", head: true }).eq("user_id", user?.id),
+        supabase.from("cover_letters").select("*", { count: "exact", head: true }).eq("user_id", user?.id),
+      ])
+
+      setStats({
+        resumes: resumesResult.count || 0,
+        applications: applicationsResult.count || 0,
+        coverLetters: coverLettersResult.count || 0,
+      })
+
+      // Fetch community posts
+      const { data: postsData } = await supabase
+        .from("community_posts")
+        .select("*")
+        .eq("is_active", true)
+        .order("is_pinned", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(5)
+
+      setCommunityPosts(postsData || [])
+
+      // Fetch recent activities
+      const { data: activitiesData } = await supabase
+        .from("user_activities")
+        .select("*")
+        .eq("user_id", user?.id)
+        .order("created_at", { ascending: false })
+        .limit(8)
+
+      setRecentActivities(activitiesData || [])
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const features = [
     {
       id: 1,
-      title: "Software Engineer",
-      company: "Tech Innovations Ltd",
-      location: "Nairobi, Kenya",
-      salary: "$120,000 - $180,000",
-      posted: "2 days ago",
+      title: "Resume Builder",
+      description: "Create professional, ATS-optimized resumes",
+      icon: FileText,
+      route: "/resume-builder",
+      isPremium: false,
+      bgColor: "bg-blue-50",
+      iconColor: "text-blue-600",
+      borderColor: "border-blue-200",
     },
     {
       id: 2,
-      title: "Marketing Manager",
-      company: "Global Marketing Solutions",
-      location: "Mombasa, Kenya",
-      salary: "$100,000 - $150,000",
-      posted: "3 days ago",
+      title: "Cover Letter Generator",
+      description: "AI-powered cover letters tailored to job descriptions",
+      icon: MessageSquare,
+      route: "/cover-letter",
+      isPremium: false,
+      bgColor: "bg-green-50",
+      iconColor: "text-green-600",
+      borderColor: "border-green-200",
     },
     {
       id: 3,
-      title: "Financial Analyst",
-      company: "East African Bank",
-      location: "Nairobi, Kenya",
-      salary: "$90,000 - $130,000",
-      posted: "1 week ago",
+      title: "ATS Optimizer",
+      description: "Optimize your resume for Applicant Tracking Systems",
+      icon: Zap,
+      route: "/ats-optimizer",
+      isPremium: true,
+      bgColor: "bg-purple-50",
+      iconColor: "text-purple-600",
+      borderColor: "border-purple-200",
     },
-  ])
-  const supabase = createClientComponentClient()
-  const router = useRouter()
+    {
+      id: 4,
+      title: "Job Applications",
+      description: "Track and manage your job applications",
+      icon: Briefcase,
+      route: "/applications",
+      isPremium: false,
+      bgColor: "bg-orange-50",
+      iconColor: "text-orange-600",
+      borderColor: "border-orange-200",
+    },
+    {
+      id: 5,
+      title: "Job Board",
+      description: "Discover exclusive job opportunities",
+      icon: Search,
+      route: "/jobs",
+      isPremium: false,
+      bgColor: "bg-indigo-50",
+      iconColor: "text-indigo-600",
+      borderColor: "border-indigo-200",
+    },
+    {
+      id: 6,
+      title: "Interview Prep",
+      description: "AI-powered interview practice and feedback",
+      icon: MessageSquare,
+      route: "/interview-prep",
+      isPremium: true,
+      isProfessional: true,
+      bgColor: "bg-pink-50",
+      iconColor: "text-pink-600",
+      borderColor: "border-pink-200",
+    },
+  ]
 
-  // Determine subscription tier
-  const isFree = !isPremium && !isProfessional && !isCorporate
-
-  useEffect(() => {
-    async function fetchData() {
-      try {
-        const { data: userData } = await supabase.auth.getUser()
-        if (!userData?.user) {
-          console.log("No user found, waiting for user data...")
-          setIsLoading(false)
-          return
-        }
-
-        console.log("Fetching data for user:", userData.user.id)
-        setIsLoading(true)
-
-        // Fetch recent resumes with error handling
-        try {
-          const { data: resumeData, error: resumeError } = await supabase
-            .from("resumes")
-            .select("*")
-            .eq("user_id", userData.user.id)
-            .order("updated_at", { ascending: false })
-            .limit(3)
-
-          if (resumeError) {
-            console.error("Error fetching resumes:", resumeError)
-            toast({
-              variant: "destructive",
-              title: "Error fetching resumes",
-              description: "Please try refreshing the page.",
-            })
-          } else {
-            console.log("Fetched resumes:", resumeData)
-            setRecentResumes(resumeData || [])
-          }
-        } catch (error) {
-          console.error("Network error fetching resumes:", error)
-        }
-
-        // Fetch activity timeline with error handling
-        try {
-          const activityData = await getActivityTimeline(userData.user.id, 5)
-          setRecentActivity(activityData || [])
-        } catch (error) {
-          console.error("Error fetching activity timeline:", error)
-        }
-
-        // Fetch stats with error handling
-        try {
-          const { data: resumeCount, error: resumeCountError } = await supabase
-            .from("resumes")
-            .select("id", { count: "exact" })
-            .eq("user_id", userData.user.id)
-
-          if (resumeCountError) {
-            console.error("Error fetching resume count:", resumeCountError)
-          }
-
-          const { data: coverLetterCount, error: coverLetterCountError } = await supabase
-            .from("cover_letters")
-            .select("id", { count: "exact" })
-            .eq("user_id", userData.user.id)
-
-          if (coverLetterCountError) {
-            console.error("Error fetching cover letter count:", coverLetterCountError)
-          }
-
-          const { data: applicationCount, error: applicationCountError } = await supabase
-            .from("job_applications")
-            .select("id", { count: "exact" })
-            .eq("user_id", userData.user.id)
-
-          if (applicationCountError) {
-            console.error("Error fetching application count:", applicationCountError)
-          }
-
-          setStats({
-            totalResumes: resumeCount?.length || 0,
-            totalCoverLetters: coverLetterCount?.length || 0,
-            totalApplications: applicationCount?.length || 0,
-            completionRate: Math.min(100, ((resumeCount?.length || 0) / 5) * 100), // Assuming 5 resumes is "complete"
-          })
-        } catch (error) {
-          console.error("Network error fetching stats:", error)
-        }
-      } catch (error) {
-        console.error("Error in dashboard fetchData:", error)
-      } finally {
-        setIsLoading(false)
-      }
+  const canAccessFeature = (feature: any) => {
+    if (!feature.isPremium) return true
+    if (feature.isProfessional) {
+      return subscription?.plan_type === "professional" || subscription?.plan_type === "corporate"
     }
-
-    fetchData()
-  }, [supabase, toast])
-
-  // Format date for display
-  const formatDate = (dateString) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
-  }
-
-  // Get activity icon based on type
-  const getActivityIcon = (type, action) => {
-    switch (type) {
-      case "resume":
-        return action === "create" ? <FileText className="h-4 w-4" /> : <Download className="h-4 w-4" />
-      case "cover_letter":
-        return <PenTool className="h-4 w-4" />
-      case "job_application":
-        return <Briefcase className="h-4 w-4" />
-      default:
-        return <Clock className="h-4 w-4" />
-    }
-  }
-
-  // Get activity description
-  const getActivityDescription = (activity) => {
-    const { entity_type, action, entity_id } = activity
-
-    switch (entity_type) {
-      case "resume":
-        return action === "create"
-          ? "Created a new resume"
-          : action === "update"
-            ? "Updated resume"
-            : action === "download"
-              ? "Downloaded resume"
-              : "Viewed resume"
-      case "cover_letter":
-        return action === "create"
-          ? "Created a new cover letter"
-          : action === "update"
-            ? "Updated cover letter"
-            : "Viewed cover letter"
-      case "job_application":
-        return action === "create" ? "Applied for a job" : "Updated job application"
-      default:
-        return "Performed an action"
-    }
-  }
-
-  if (loading || isLoading) {
     return (
-      <DashboardLayout>
-        <div className="container py-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          </div>
-        </div>
-      </DashboardLayout>
+      subscription?.plan_type === "premium" ||
+      subscription?.plan_type === "professional" ||
+      subscription?.plan_type === "corporate"
+    )
+  }
+
+  const getActivityIcon = (activityType: string) => {
+    switch (activityType) {
+      case "resume_created":
+      case "resume_downloaded":
+        return <FileText className="h-4 w-4 text-blue-500" />
+      case "cover_letter_created":
+      case "cover_letter_downloaded":
+        return <MessageSquare className="h-4 w-4 text-green-500" />
+      case "job_applied":
+        return <Briefcase className="h-4 w-4 text-orange-500" />
+      case "ats_optimization":
+        return <Zap className="h-4 w-4 text-purple-500" />
+      case "interview_session":
+        return <MessageSquare className="h-4 w-4 text-pink-500" />
+      case "payment_made":
+        return <Crown className="h-4 w-4 text-yellow-500" />
+      default:
+        return <Activity className="h-4 w-4 text-gray-500" />
+    }
+  }
+
+  const getPostTypeColor = (postType: string) => {
+    switch (postType) {
+      case "announcement":
+        return "bg-blue-100 text-blue-800"
+      case "update":
+        return "bg-green-100 text-green-800"
+      case "tip":
+        return "bg-yellow-100 text-yellow-800"
+      case "success_story":
+        return "bg-purple-100 text-purple-800"
+      case "maintenance":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
     )
   }
 
   return (
-    <DashboardLayout>
-      <div className="container py-8">
-        <div className="flex flex-col gap-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">
+          Welcome back, {user?.user_metadata?.full_name?.split(" ")[0] || "there"}!
+        </h1>
+        <p className="text-gray-600 mt-2">Choose a tool to accelerate your job search</p>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-              <p className="text-muted-foreground">
-                Welcome to your CV Chap Chap dashboard. Get started with our tools below.
-              </p>
+              <p className="text-sm text-gray-600">Resumes Created</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.resumes}</p>
             </div>
-            {isFree && (
-              <Button onClick={handleUpgradeClick}>
-                <Crown className="mr-2 h-4 w-4" />
-                Upgrade to Premium
-              </Button>
-            )}
+            <FileText className="h-8 w-8 text-blue-600" />
           </div>
-
-          {/* Subscription Banner for Free Users */}
-          {isFree && (
-            <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                  <div className="bg-primary/10 p-3 rounded-full">
-                    <Crown className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold">You're on the Free Plan</h3>
-                    <p className="text-sm text-muted-foreground">
-                      <span className="font-medium">Your usage: </span>
-                      Cover Letters: {userStats?.coverLettersUsed || 0}/5 | Resume Downloads:{" "}
-                      {userStats?.resumeDownloadsUsed || 0}/1
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Upgrade to Premium for unlimited cover letters, full ATS optimization, and more.
-                    </p>
-                  </div>
-                  <Button onClick={handleUpgradeClick} className="w-full md:w-auto">
-                    Upgrade Now
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Premium User Banner */}
-          {isPremium && (
-            <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                  <div className="bg-primary/10 p-3 rounded-full">
-                    <Crown className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold">Premium Plan</h3>
-                    <p className="text-sm text-muted-foreground">
-                      <span className="font-medium">Your usage: </span>
-                      Resume Downloads: {userStats?.resumeDownloadsUsed || 0}/10
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Enjoy unlimited cover letters, full ATS optimization, and premium features.
-                    </p>
-                  </div>
-                  {userStats?.resumeDownloadsUsed >= 8 && (
-                    <Button onClick={handleUpgradeClick} className="w-full md:w-auto">
-                      Upgrade to Corporate
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Corporate User Banner */}
-          {isCorporate && (
-            <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="p-6">
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-                  <div className="bg-primary/10 p-3 rounded-full">
-                    <Crown className="h-6 w-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold">Corporate Plan</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Enjoy all premium features plus bulk hiring tools, AI candidate matching, and more.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Stats Overview */}
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Total Resumes</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalResumes}</div>
-                <p className="text-xs text-muted-foreground">+{Math.max(0, stats.totalResumes - 1)} from last month</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Cover Letters</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalCoverLetters}</div>
-                <p className="text-xs text-muted-foreground">
-                  +{Math.max(0, stats.totalCoverLetters - 1)} from last month
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Applications</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalApplications}</div>
-                <p className="text-xs text-muted-foreground">
-                  +{Math.max(0, stats.totalApplications - 1)} from last month
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Profile Completion</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center justify-between">
-                  <div className="text-2xl font-bold">{Math.round(stats.completionRate)}%</div>
-                  <TrendingUp className="h-4 w-4 text-green-500" />
-                </div>
-                <Progress value={stats.completionRate} className="mt-2" />
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {/* Resume Builder Card */}
-            <Card>
-              <CardHeader className="p-6">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-blue-500/10 text-blue-500">
-                  <FileText className="h-6 w-6" />
-                </div>
-                <CardTitle className="mt-4">Resume Builder</CardTitle>
-                <CardDescription>
-                  Create ATS-optimized resumes with our AI-powered builder
-                  {isFree && (
-                    <span className="block mt-1 text-xs">
-                      Free Plan: {userStats?.resumeDownloadsUsed || 0}/1 downloads used
-                    </span>
-                  )}
-                  {isPremium && (
-                    <span className="block mt-1 text-xs">
-                      Premium Plan: {userStats?.resumeDownloadsUsed || 0}/10 downloads used
-                    </span>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardFooter className="p-6 pt-0">
-                <Button asChild className="w-full">
-                  <Link href="/dashboard/resume-builder">Get Started</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-
-            {/* Cover Letter Generator Card */}
-            <Card>
-              <CardHeader className="p-6">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-green-500/10 text-green-500">
-                  <PenTool className="h-6 w-6" />
-                </div>
-                <CardTitle className="mt-4">Cover Letter Generator</CardTitle>
-                <CardDescription>
-                  {isFree
-                    ? `Generate tailored cover letters (${userStats?.coverLettersUsed || 0}/5 used)`
-                    : "Generate unlimited tailored cover letters"}
-                </CardDescription>
-              </CardHeader>
-              <CardFooter className="p-6 pt-0">
-                <Button asChild className="w-full">
-                  <Link href="/dashboard/cover-letters">Get Started</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-
-            {/* ATS Optimizer Card */}
-            <Card>
-              <CardHeader className="p-6">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-purple-500/10 text-purple-500">
-                  <FileCheck className="h-6 w-6" />
-                </div>
-                <CardTitle className="mt-4">ATS Optimizer</CardTitle>
-                <CardDescription>
-                  {isFree
-                    ? "Basic ATS score without detailed fixes"
-                    : "Full ATS optimization with detailed recommendations"}
-                </CardDescription>
-              </CardHeader>
-              <CardFooter className="p-6 pt-0">
-                <Button asChild className="w-full">
-                  <Link href="/dashboard/ats-optimizer">Get Started</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-
-            {/* Job Board Card */}
-            <Card>
-              <CardHeader className="p-6">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-orange-500/10 text-orange-500">
-                  <Briefcase className="h-6 w-6" />
-                </div>
-                <CardTitle className="mt-4">Job Board</CardTitle>
-                <CardDescription>
-                  {isFree ? "Browse jobs in read-only mode" : "Save jobs, get alerts, and apply directly"}
-                </CardDescription>
-              </CardHeader>
-              <CardFooter className="p-6 pt-0">
-                <Button asChild className="w-full">
-                  <Link href="/dashboard/job-board">Get Started</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-
-            {/* AI Interview Prep Card */}
-            <Card className={isFree ? "opacity-80" : ""}>
-              <CardHeader className="p-6">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-indigo-500/10 text-indigo-500">
-                  <MessageSquare className="h-6 w-6" />
-                </div>
-                <div className="flex items-center gap-2">
-                  <CardTitle className="mt-4">AI Interview Prep</CardTitle>
-                  {isFree && (
-                    <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full mt-4">Premium</span>
-                  )}
-                </div>
-                <CardDescription>Practice interviews with AI-generated questions</CardDescription>
-              </CardHeader>
-              <CardFooter className="p-6 pt-0">
-                {isFree ? (
-                  <Button variant="outline" className="w-full" onClick={() => router.push("/payment?plan=premium")}>
-                    <Lock className="mr-2 h-4 w-4" />
-                    Upgrade to Access
-                  </Button>
-                ) : (
-                  <Button asChild className="w-full">
-                    <Link href="/dashboard/interview-prep">Get Started</Link>
-                  </Button>
-                )}
-              </CardFooter>
-            </Card>
-
-            {/* Activity Log Card */}
-            <Card>
-              <CardHeader className="p-6">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-teal-500/10 text-teal-500">
-                  <Activity className="h-6 w-6" />
-                </div>
-                <CardTitle className="mt-4">Activity Log</CardTitle>
-                <CardDescription>Track your recent applications and activity</CardDescription>
-              </CardHeader>
-              <CardFooter className="p-6 pt-0">
-                <Button asChild className="w-full">
-                  <Link href="/activity">View Activity</Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Recent Resumes */}
+        </div>
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Recent Resumes</h2>
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/dashboard/resume-builder">
-                    <Plus className="mr-2 h-4 w-4" />
-                    New Resume
-                  </Link>
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                {isLoading ? (
-                  Array(3)
-                    .fill(0)
-                    .map((_, i) => (
-                      <Card key={i} className="h-[100px] flex items-center justify-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                      </Card>
-                    ))
-                ) : recentResumes.length > 0 ? (
-                  recentResumes.map((resume: any) => (
-                    <Card key={resume.id}>
-                      <CardHeader className="p-4">
-                        <CardTitle className="text-lg truncate">{resume.title}</CardTitle>
-                        <CardDescription>Last updated: {formatDate(resume.updated_at)}</CardDescription>
-                      </CardHeader>
-                      <CardFooter className="p-4 pt-0 flex justify-between">
-                        <Button asChild variant="outline">
-                          <Link href={`/dashboard/resume-builder?id=${resume.id}`}>Edit Resume</Link>
-                        </Button>
-                        <Button asChild variant="outline">
-                          <Link href={`/dashboard/resume-builder/download?id=${resume.id}`}>Download</Link>
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))
-                ) : (
-                  <Card className="p-6 text-center">
-                    <p className="text-muted-foreground mb-4">You haven't created any resumes yet.</p>
-                    <Button asChild>
-                      <Link href="/dashboard/resume-builder">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Create Your First Resume
-                      </Link>
-                    </Button>
-                  </Card>
-                )}
-              </div>
+              <p className="text-sm text-gray-600">Cover Letters</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.coverLetters}</p>
             </div>
-
-            {/* AI Interview Prep Tool */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">AI Interview Prep</h2>
-                {!isFree && (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href="/dashboard/interview-prep">View All</Link>
-                  </Button>
-                )}
-              </div>
-
-              <Card>
-                <CardContent className="p-4">
-                  {isFree ? (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <Lock className="h-12 w-12 text-muted-foreground mb-4" />
-                      <h3 className="text-lg font-medium">Premium Feature</h3>
-                      <p className="text-sm text-muted-foreground mb-4 max-w-md">
-                        Upgrade to Premium to access AI Interview Prep and practice with personalized interview
-                        questions.
-                      </p>
-                      <Button onClick={() => router.push("/payment?plan=premium")}>Upgrade Now</Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-4 py-2">
-                      <p className="text-sm text-muted-foreground">
-                        Practice your interview skills with AI-generated questions tailored to your industry and role.
-                      </p>
-                      <div className="space-y-3">
-                        <div className="rounded-lg border p-3">
-                          <p className="font-medium">Tell me about yourself</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Common opener for software developer interviews
-                          </p>
-                        </div>
-                        <div className="rounded-lg border p-3">
-                          <p className="font-medium">What are your greatest strengths?</p>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Focus on skills relevant to the job description
-                          </p>
-                        </div>
-                        <div className="rounded-lg border p-3">
-                          <p className="font-medium">Why do you want to work for this company?</p>
-                          <p className="text-sm text-muted-foreground mt-1">Research the company before answering</p>
-                        </div>
-                      </div>
-                      <Button asChild className="w-full">
-                        <Link href="/dashboard/interview-prep">Start Practice Session</Link>
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+            <MessageSquare className="h-8 w-8 text-green-600" />
           </div>
-
-          {/* Recent Job Listings */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">Recent Job Listings</h2>
-              <Button asChild variant="outline" size="sm">
-                <Link href="/dashboard/job-board">View All Jobs</Link>
-              </Button>
+        </div>
+        <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Applications</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.applications}</p>
             </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              {recentJobs.map((job) => (
-                <Card key={job.id}>
-                  <CardHeader className="p-4">
-                    <CardTitle className="text-lg">{job.title}</CardTitle>
-                    <CardDescription>{job.company}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <div className="space-y-2 text-sm">
-                      <div className="flex items-center">
-                        <Users className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <span>{job.location}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <TrendingUp className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <span>{job.salary}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
-                        <span>Posted {job.posted}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="p-4 pt-0">
-                    <Button asChild variant="outline" className="w-full">
-                      <Link href={`/dashboard/job-board/${job.id}`}>View Job</Link>
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
-            </div>
+            <Briefcase className="h-8 w-8 text-orange-600" />
           </div>
         </div>
       </div>
-    </DashboardLayout>
+
+      {/* Feature Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {features.map((feature) => {
+          const hasAccess = canAccessFeature(feature)
+          const FeatureIcon = feature.icon
+
+          return (
+            <Card
+              key={feature.id}
+              className={`relative transition-all duration-200 hover:shadow-lg ${feature.borderColor} ${
+                hasAccess ? "hover:scale-105 cursor-pointer" : "opacity-75"
+              }`}
+            >
+              {feature.isPremium && (
+                <div className="absolute top-4 right-4">
+                  {feature.isProfessional ? (
+                    <Badge className="bg-pink-100 text-pink-800 border-pink-200">
+                      <Crown className="h-3 w-3 mr-1" />
+                      Professional
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+                      <Crown className="h-3 w-3 mr-1" />
+                      Premium
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              <CardHeader className={`${feature.bgColor} rounded-t-lg`}>
+                <div className="flex items-center space-x-3">
+                  <div className={`p-2 rounded-lg bg-white`}>
+                    <FeatureIcon className={`h-6 w-6 ${feature.iconColor}`} />
+                  </div>
+                  <div className="flex-1">
+                    <CardTitle className="text-lg">{feature.title}</CardTitle>
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="pt-4">
+                <CardDescription className="text-gray-600 mb-4">{feature.description}</CardDescription>
+
+                {hasAccess ? (
+                  <Link href={feature.route}>
+                    <div className="w-full bg-gray-900 text-white py-2 px-4 rounded-md text-center hover:bg-gray-800 transition-colors">
+                      Open Tool
+                    </div>
+                  </Link>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="w-full bg-gray-200 text-gray-500 py-2 px-4 rounded-md text-center flex items-center justify-center">
+                      <Lock className="h-4 w-4 mr-2" />
+                      Upgrade Required
+                    </div>
+                    <Link href="/pricing">
+                      <div className="w-full bg-blue-600 text-white py-2 px-4 rounded-md text-center hover:bg-blue-700 transition-colors text-sm">
+                        View Plans
+                      </div>
+                    </Link>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      {/* Bottom Section: Activity Tab (Left) and Community Board (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Activity Tab - Left */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Activity className="mr-2 h-5 w-5" />
+              Recent Activity
+            </CardTitle>
+            <CardDescription>Your latest actions and achievements</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {recentActivities.length === 0 ? (
+              <div className="text-center py-8">
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No recent activity</p>
+                <p className="text-sm text-gray-500">Start using our tools to see your activity here</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recentActivities.map((activity) => (
+                  <div key={activity.id} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-shrink-0 mt-0.5">{getActivityIcon(activity.activity_type)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900">{activity.description}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {new Date(activity.created_at).toLocaleDateString()} at{" "}
+                        {new Date(activity.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+
+                {recentActivities.length >= 8 && (
+                  <div className="text-center pt-4">
+                    <Button variant="outline" size="sm">
+                      View All Activity
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Community Board - Right */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Bell className="mr-2 h-5 w-5" />
+              Community Board
+            </CardTitle>
+            <CardDescription>Latest updates, announcements, and tips</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {communityPosts.length === 0 ? (
+              <div className="text-center py-8">
+                <Bell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No announcements</p>
+                <p className="text-sm text-gray-500">Check back later for updates</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {communityPosts.map((post) => (
+                  <div key={post.id} className="border-l-4 border-blue-500 pl-4 py-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <h4 className="font-medium text-gray-900 text-sm">{post.title}</h4>
+                        {post.is_pinned && (
+                          <Badge variant="outline" className="text-xs">
+                            Pinned
+                          </Badge>
+                        )}
+                      </div>
+                      <Badge className={`text-xs ${getPostTypeColor(post.post_type)}`}>
+                        {post.post_type.replace("_", " ")}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 line-clamp-2">{post.content}</p>
+                    <p className="text-xs text-gray-500 mt-2">{new Date(post.created_at).toLocaleDateString()}</p>
+                  </div>
+                ))}
+
+                <div className="text-center pt-4">
+                  <Button variant="outline" size="sm">
+                    View All Posts
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Upgrade Banner */}
+      {(!subscription || subscription.plan_type === "free") && (
+        <Card className="mt-8 bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Unlock Your Full Potential</h3>
+              <p className="text-gray-600 mb-4">
+                Upgrade to Premium or Professional to access all AI-powered tools and accelerate your job search.
+              </p>
+              <Link href="/pricing">
+                <div className="inline-flex items-center bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors">
+                  <Crown className="h-5 w-5 mr-2" />
+                  View Pricing Plans
+                </div>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }
