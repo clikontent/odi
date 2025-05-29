@@ -59,7 +59,6 @@ export default function JobBoardPage() {
       setShowPrivateJobs(privateJobs.length)
 
       await fetchExternalJobs()
-
     } catch (error) {
       console.error("Error fetching jobs:", error)
     } finally {
@@ -105,9 +104,9 @@ export default function JobBoardPage() {
       })))
 
       // Active Jobs
-           const activeRes = await fetch('https://active-jobs-db.p.rapidapi.com/active-ats-24h?limit=10&offset=0&title_filter=%22Data%20Engineer%22&location_filter=%22United%20States%22%20OR%20%22United%20Kingdom%22&description_type=text', {
+      const activeRes = await fetch('https://active-jobs-db.p.rapidapi.com/active-ats-24h?limit=10&offset=0&title_filter=%22Data%20Engineer%22&location_filter=%22United%20States%22%20OR%20%22United%20Kingdom%22&description_type=text', {
         headers: {
-          'x-rapidapi-key': 'YOUR_API_KEY_HERE',
+          'x-rapidapi-key': '157f53683amshb93ded32c4223aap1d45c3jsn9ba4cb60b544',
           'x-rapidapi-host': 'active-jobs-db.p.rapidapi.com'
         }
       })
@@ -128,13 +127,13 @@ export default function JobBoardPage() {
         external_url: job.job_url,
       })))
 
-    // Upwork Jobs
-const upworkRes = await fetch('https://upwork-jobs-api2.p.rapidapi.com/active-freelance-24h?limit=10', {
-  headers: {
-    'x-rapidapi-key': '157f53683amshb93ded32c4223aap1d45c3jsn9ba4cb60b544',
-    'x-rapidapi-host': 'upwork-jobs-api2.p.rapidapi.com'
-  }
-})
+      // Upwork Jobs
+      const upworkRes = await fetch('https://upwork-jobs-api2.p.rapidapi.com/active-freelance-24h?limit=10', {
+        headers: {
+          'x-rapidapi-key': '157f53683amshb93ded32c4223aap1d45c3jsn9ba4cb60b544',
+          'x-rapidapi-host': 'upwork-jobs-api2.p.rapidapi.com'
+        }
+      })
       const upworkData = await upworkRes.json()
       results.push(...(upworkData.jobs || []).map((job: any) => ({
         id: job.id,
@@ -170,7 +169,7 @@ const upworkRes = await fetch('https://upwork-jobs-api2.p.rapidapi.com/active-fr
         (job) =>
           job.job_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
           job.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          job.description.toLowerCase().includes(searchTerm.toLowerCase()),
+          job.description.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
 
