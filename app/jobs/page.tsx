@@ -13,10 +13,13 @@ import { supabase } from "@/lib/supabase"
 import { getUserSubscription } from "@/lib/subscription"
 import type { JobPosting, Subscription } from "@/lib/types"
 import Link from "next/link"
+import { request } from 'undici'
+
 
 export default function JobBoardPage() {
   const { user } = useAuth()
   const [jobs, setJobs] = useState<JobPosting[]>([])
+  const [externalJobs, setExternalJobs] = useState<JobPosting[]>([])
   const [filteredJobs, setFilteredJobs] = useState<JobPosting[]>([])
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
@@ -32,7 +35,7 @@ export default function JobBoardPage() {
 
   useEffect(() => {
     filterJobs()
-  }, [jobs, searchTerm, locationFilter, jobTypeFilter, experienceFilter])
+  }, [jobs, externalJobs, searchTerm, locationFilter, jobTypeFilter, experienceFilter])
 
   const fetchJobsAndSubscription = async () => {
     try {
@@ -42,7 +45,206 @@ export default function JobBoardPage() {
         setSubscription(subData)
       }
 
-      // Fetch all active jobs (both public and private)
+      const { data, error } = await supabase
+        .from("job_postings")
+        .select("*")
+        .eq("is_active", true)
+        .order("posted_date", { ascending: false })
+
+      if (error) throw error
+
+      const allJobs = data || []
+      const publicJobs = allJobs.filter((job) => !job.is_private)
+      const privateJobs = allJobs.filter((job) => job.is_private)
+
+      setJobs(allJobs)
+      setShowPrivateJobs(privateJobs.length)
+
+      // Fetch external jobs
+      fetchExternalJobs()
+
+    } catch (error) {
+      console.error("Error fetching jobs:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchExternalJobs = async () => {
+    try {
+      const results: JobPosting[] = []
+
+      // Their Stack
+    const { statusCode, body } = await request('https://api.theirstack.com/v1/jobs/search', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer asdfasd'
+  },
+  body: JSON.stringify({
+    order_by: [{
+      desc: true,
+      field: 'date_posted'
+    },   {
+      desc: true,
+      field: 'discovered_at'
+    }],
+    offset: 0,
+    page: 0,
+    limit: 25,
+    job_title_or: [],
+    job_title_not: [],
+    job_title_pattern_and: [],
+    job_title_pattern_or: [],
+    job_title_pattern_not: [],
+    job_country_code_or: [],
+    job_country_code_not: [],
+    posted_at_max_age_days: 7,
+    job_description_pattern_or: [],
+    job_description_pattern_not: [],
+    job_description_pattern_is_case_insensitive: true,
+    job_id_or: [],
+    job_id_not: [],
+    job_ids: [],
+    job_seniority_or: [],
+    job_technology_slug_or: [],
+    job_technology_slug_not: [],
+    job_technology_slug_and: [],
+    job_location_pattern_or: [],
+    job_location_pattern_not: [],
+    url_domain_or: [],
+    url_domain_not: [],
+    scraper_name_pattern_or: [],
+    company_name_or: [],
+    company_name_case_insensitive_or: [],
+    company_id_or: [],
+    company_domain_or: [],
+    company_domain_not: [],
+    company_name_not: [],
+    company_name_partial_match_or: [],
+    company_name_partial_match_not: [],
+    company_linkedin_url_or: [],
+    company_description_pattern_or: [],
+    company_description_pattern_not: [],
+    company_description_pattern_accent_insensitive: false,
+    funding_stage_or: [],
+    industry_or: [],
+    industry_not: [],
+    industry_id_or: [],
+    industry_id_not: [],
+    company_tags_or: [],
+    company_investors_or: [],
+    company_investors_partial_match_or: [],
+    company_technology_slug_or: [],
+    company_technology_slug_and: [],
+    company_technology_slug_not: [],
+    only_yc_companies: false,
+    company_location_pattern_or: [],
+    company_country_code_or: [],
+    company_country_code_not: [],
+    company_list_id_or: [],
+    company_list_id_not: [],
+    include_total_results: false,
+    blur_company_data: false
+  })
+})
+
+      // Active Jobs
+      const http = require('https');
+
+const options = {
+	method: 'GET',
+	hostname: 'active-jobs-db.p.rapidapi.com',
+	port: null,
+	path: '/active-ats-24h?limit=10&offset=0&title_filter=%22Data%20Engineer%22&location_filter=%22United%20States%22%20OR%20%22United%20Kingdom%22&description_type=text',
+	headers: {
+		'x-rapidapi-key': '157f53683amshb93ded32c4223aap1d45c3jsn9ba4cb60b544',
+		'x-rapidapi-host': 'active-jobs-db.p.rapidapi.com'
+	}
+};
+
+const req = http.request(options, function (res) {
+	const chunks = [];
+
+	res.on('data', function (chunk) {
+		chunks.push(chunk);
+	});
+
+	res.on('end', function () {
+		const body = Buffer.concat(chunks);
+		console.log(body.toString());
+	});
+});
+
+req.end();
+
+      // Upwork Jobs
+     const http = require('https');
+
+const options = {
+	method: 'GET',
+	hostname: 'upwork-jobs-api2.p.rapidapi.com',
+	port: null,
+	path: '/active-freelance-24h?limit=10',
+	headers: {
+		'x-rapidapi-key': '157f53683amshb93ded32c4223aap1d45c3jsn9ba4cb60b544',
+		'x-rapidapi-host': 'upwork-jobs-api2.p.rapidapi.com'
+	}
+};
+
+const req = http.request(options, function (res) {
+	const chunks = [];
+
+	res.on('data', function (chunk) {
+		chunks.push(chunk);
+	});
+
+	res.on('end', function () {
+		const body = Buffer.concat(chunks);
+		console.log(body.toString());
+	});
+});
+
+req.end();
+
+      setExternalJobs(results)
+    } catch (error) {
+      console.error("Error fetching external jobs:", error)
+    }
+  }
+
+  const filterJobs = () => {
+    let combined = [...jobs, ...externalJobs]
+
+    if (!user || !subscription || subscription.plan_type === "free") {
+      combined = combined.filter((job) => !job.is_private)
+    }
+
+    if (searchTerm) {
+      combined = combined.filter(
+        (job) =>
+          job.job_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          job.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          job.description.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    }
+
+    if (locationFilter) {
+      combined = combined.filter((job) => job.location?.toLowerCase().includes(locationFilter.toLowerCase()))
+    }
+
+    if (jobTypeFilter !== "all") {
+      combined = combined.filter((job) => job.job_type === jobTypeFilter)
+    }
+
+    if (experienceFilter !== "all") {
+      combined = combined.filter((job) => job.experience_level === experienceFilter)
+    }
+
+    setFilteredJobs(combined)
+  }
+
+  // Fetch all active jobs (both public and private)
       const { data, error } = await supabase
         .from("job_postings")
         .select("*")
@@ -396,4 +598,5 @@ export default function JobBoardPage() {
       )}
     </div>
   )
+}
 }
