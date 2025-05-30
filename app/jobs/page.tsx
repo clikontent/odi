@@ -17,7 +17,6 @@ import Link from "next/link"
 export default function JobBoardPage() {
   const { user } = useAuth()
   const [jobs, setJobs] = useState<JobPosting[]>([])
-  const [externalJobs, setExternalJobs] = useState<JobPosting[]>([])
   const [filteredJobs, setFilteredJobs] = useState<JobPosting[]>([])
   const [subscription, setSubscription] = useState<Subscription | null>(null)
   const [loading, setLoading] = useState(true)
@@ -33,7 +32,7 @@ export default function JobBoardPage() {
 
   useEffect(() => {
     filterJobs()
-  }, [jobs, externalJobs, searchTerm, locationFilter, jobTypeFilter, experienceFilter])
+  }, [jobs, searchTerm, locationFilter, jobTypeFilter, experienceFilter])
 
   const fetchJobsAndSubscription = async () => {
     try {
@@ -43,6 +42,7 @@ export default function JobBoardPage() {
         setSubscription(subData)
       }
 
+      // Fetch all active jobs (both public and private)
       const { data, error } = await supabase
         .from("job_postings")
         .select("*")
@@ -52,13 +52,13 @@ export default function JobBoardPage() {
       if (error) throw error
 
       const allJobs = data || []
+
+      // Separate public and private jobs for display
       const publicJobs = allJobs.filter((job) => !job.is_private)
       const privateJobs = allJobs.filter((job) => job.is_private)
 
       setJobs(allJobs)
       setShowPrivateJobs(privateJobs.length)
-
-      await fetchExternalJobs()
     } catch (error) {
       console.error("Error fetching jobs:", error)
     } finally {
@@ -66,127 +66,350 @@ export default function JobBoardPage() {
     }
   }
 
-  const fetchExternalJobs = async () => {
-    try {
-      const results: JobPosting[] = []
-
-      // Their Stack
-      const stackRes = await fetch('https://api.theirstack.com/v1/jobs/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJvZGltYW9zY2FyQGdtYWlsLmNvbSIsInBlcm1pc3Npb25zIjoidXNlciIsImNyZWF0ZWRfYXQiOiIyMDI1LTA1LTI4VDEwOjE3OjUyLjYyMDE1NSswMDowMCJ9.f1qCuZpYvWGLGQ9fFu76D13aZQT1LZZgDecXA0IHkU0'
-        },
-        body: JSON.stringify({
-          order_by: [
-            { desc: true, field: 'date_posted' },
-            { desc: true, field: 'discovered_at' }
-          ],
-          limit: 25,
-          posted_at_max_age_days: 7
-        })
-      })
-      const stackData = await stackRes.json()
-      results.push(...(stackData.jobs || []).map((job: any) => ({
-        id: job.id,
-        job_title: job.title,
-        company_name: job.company,
-        description: job.description || '',
-        posted_date: job.date || new Date().toISOString(),
-        location: job.location || 'Remote',
-        job_type: 'remote',
-        experience_level: 'mid',
-        salary_range: job.salary || '',
-        skills_required: job.skills || [],
-        is_private: false,
-        is_featured: false,
-        external_url: job.url,
-      })))
-
-      // Active Jobs
-      const activeRes = await fetch('https://active-jobs-db.p.rapidapi.com/active-ats-24h?limit=10&offset=0&title_filter=%22Data%20Engineer%22&location_filter=%22United%20States%22%20OR%20%22United%20Kingdom%22&description_type=text', {
-        headers: {
-          'x-rapidapi-key': '157f53683amshb93ded32c4223aap1d45c3jsn9ba4cb60b544',
-          'x-rapidapi-host': 'active-jobs-db.p.rapidapi.com'
-        }
-      })
-      const activeData = await activeRes.json()
-      results.push(...(activeData.data || []).map((job: any) => ({
-        id: job.id,
-        job_title: job.title,
-        company_name: job.company_name,
-        description: job.description || '',
-        posted_date: job.posted_at || new Date().toISOString(),
-        location: job.location || 'Remote',
-        job_type: 'remote',
-        experience_level: 'mid',
-        salary_range: job.salary || '',
-        skills_required: job.skills || [],
-        is_private: false,
-        is_featured: false,
-        external_url: job.job_url,
-      })))
-
-      // Upwork Jobs
-      const upworkRes = await fetch('https://upwork-jobs-api2.p.rapidapi.com/active-freelance-24h?limit=10', {
-        headers: {
-          'x-rapidapi-key': '157f53683amshb93ded32c4223aap1d45c3jsn9ba4cb60b544',
-          'x-rapidapi-host': 'upwork-jobs-api2.p.rapidapi.com'
-        }
-      })
-      const upworkData = await upworkRes.json()
-      results.push(...(upworkData.jobs || []).map((job: any) => ({
-        id: job.id,
-        job_title: job.title,
-        company_name: 'Upwork Client',
-        description: job.description || '',
-        posted_date: job.date_posted || new Date().toISOString(),
-        location: 'Remote',
-        job_type: 'contract',
-        experience_level: 'entry',
-        salary_range: job.budget || '',
-        skills_required: job.skills || [],
-        is_private: false,
-        is_featured: false,
-        external_url: job.url,
-      })))
-
-      setExternalJobs(results)
-    } catch (error) {
-      console.error("Error fetching external jobs:", error)
-    }
-  }
-
   const filterJobs = () => {
-    let combined = [...jobs, ...externalJobs]
+    let filtered = jobs
 
+    // Filter based on user access level
     if (!user || !subscription || subscription.plan_type === "free") {
-      combined = combined.filter((job) => !job.is_private)
+      // Free users and non-logged users only see public jobs
+      filtered = filtered.filter((job) => !job.is_private)
     }
+    // Premium and above can see all jobs (public + private)
 
     if (searchTerm) {
-      combined = combined.filter(
+      filtered = filtered.filter(
         (job) =>
           job.job_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
           job.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          job.description.toLowerCase().includes(searchTerm.toLowerCase())
+          job.description.toLowerCase().includes(searchTerm.toLowerCase()),
       )
     }
 
     if (locationFilter) {
-      combined = combined.filter((job) => job.location?.toLowerCase().includes(locationFilter.toLowerCase()))
+      filtered = filtered.filter((job) => job.location?.toLowerCase().includes(locationFilter.toLowerCase()))
     }
 
     if (jobTypeFilter !== "all") {
-      combined = combined.filter((job) => job.job_type === jobTypeFilter)
+      filtered = filtered.filter((job) => job.job_type === jobTypeFilter)
     }
 
     if (experienceFilter !== "all") {
-      combined = combined.filter((job) => job.experience_level === experienceFilter)
+      filtered = filtered.filter((job) => job.experience_level === experienceFilter)
     }
 
-    setFilteredJobs(combined)
+    setFilteredJobs(filtered)
   }
 
-  // (rest of the component remains unchanged)
+  const canAccessPrivateJobs = () => {
+    return user && subscription && subscription.plan_type !== "free"
+  }
+
+  const applyToJob = async (jobId: string) => {
+    if (!user) {
+      alert("Please sign in to apply for jobs")
+      return
+    }
+
+    try {
+      const job = jobs.find((j) => j.id === jobId)
+      if (!job) return
+
+      // Check if user can access this job
+      if (job.is_private && !canAccessPrivateJobs()) {
+        alert("This is a private job posting. Please upgrade to Premium or Professional to apply.")
+        return
+      }
+
+      // Create job application
+      const { error } = await supabase.from("job_applications").insert({
+        user_id: user.id,
+        job_posting_id: jobId,
+        company_name: job.company_name,
+        job_title: job.job_title,
+        status: "applied",
+        application_date: new Date().toISOString(),
+      })
+
+      if (error) throw error
+      alert("Application submitted successfully!")
+    } catch (error) {
+      console.error("Error applying to job:", error)
+      alert("Error submitting application")
+    }
+  }
+
+  const getJobTypeColor = (type: string) => {
+    switch (type) {
+      case "full-time":
+        return "bg-green-100 text-green-800"
+      case "part-time":
+        return "bg-blue-100 text-blue-800"
+      case "contract":
+        return "bg-orange-100 text-orange-800"
+      case "remote":
+        return "bg-purple-100 text-purple-800"
+      case "hybrid":
+        return "bg-indigo-100 text-indigo-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getExperienceColor = (level: string) => {
+    switch (level) {
+      case "entry":
+        return "bg-green-100 text-green-800"
+      case "mid":
+        return "bg-blue-100 text-blue-800"
+      case "senior":
+        return "bg-purple-100 text-purple-800"
+      case "executive":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Job Board</h1>
+        <p className="text-gray-600 mt-2">Discover opportunities tailored to your skills and experience</p>
+      </div>
+
+      {/* Public Jobs Info Banner */}
+      <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded flex items-center space-x-2">
+        <span className="text-green-600 font-semibold">🚀 Public Jobs</span>
+        <p className="text-green-700 text-sm">
+          These jobs are publicly available and accessible to free users.
+        </p>
+      </div>
+
+      {/* Access Level Info */}
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <span className="text-sm text-gray-600">
+              Public Jobs ({filteredJobs.filter((j) => !j.is_private).length})
+            </span>
+          </div>
+          {canAccessPrivateJobs() ? (
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+              <span className="text-sm text-gray-600">
+                Private Jobs ({filteredJobs.filter((j) => j.is_private).length})
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <Lock className="h-3 w-3 text-gray-400" />
+              <span className="text-sm text-gray-400">{showPrivateJobs} Private Jobs (Premium Required)</span>
+            </div>
+          )}
+        </div>
+
+        {!canAccessPrivateJobs() && showPrivateJobs > 0 && (
+          <Link href="/pricing">
+            <Button size="sm" variant="outline">
+              <Crown className="h-4 w-4 mr-2" />
+              Unlock Private Jobs
+            </Button>
+          </Link>
+        )}
+      </div>
+
+      {/* Filters */}
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search jobs or companies..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Location..."
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <Select value={jobTypeFilter} onValueChange={setJobTypeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Job Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="full-time">Full-time</SelectItem>
+                <SelectItem value="part-time">Part-time</SelectItem>
+                <SelectItem value="contract">Contract</SelectItem>
+                <SelectItem value="remote">Remote</SelectItem>
+                <SelectItem value="hybrid">Hybrid</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={experienceFilter} onValueChange={setExperienceFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Experience Level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Levels</SelectItem>
+                <SelectItem value="entry">Entry Level</SelectItem>
+                <SelectItem value="mid">Mid Level</SelectItem>
+                <SelectItem value="senior">Senior Level</SelectItem>
+                <SelectItem value="executive">Executive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Upgrade Banner for Free Users */}
+      {(!user || !subscription || subscription.plan_type === "free") && showPrivateJobs > 0 && (
+        <Alert className="mb-6 border-purple-200 bg-purple-50">
+          <Crown className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Unlock {showPrivateJobs} Exclusive Opportunities!</strong> Upgrade to Premium or Professional to
+            access private job postings from top companies.
+            <Link href="/pricing" className="ml-2 text-purple-600 hover:text-purple-700 font-medium">
+              View Plans →
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Job Listings */}
+      <div className="space-y-4">
+        {filteredJobs.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Briefcase className="h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs found</h3>
+              <p className="text-gray-600 text-center">
+                Try adjusting your search criteria or check back later for new opportunities.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          filteredJobs.map((job) => (
+            <Card key={job.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-6">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-2">
+                      <h3 className="text-xl font-semibold text-gray-900">{job.job_title}</h3>
+
+                      {!job.is_private && (
+                        <Badge className="bg-green-100 text-green-800 border-green-200">
+                          Public
+                        </Badge>
+                      )}
+
+                      {job.is_private && (
+                        <Badge className="bg-purple-100 text-purple-800 border-purple-200">
+                          <Crown className="h-3 w-3 mr-1" />
+                          Private
+                        </Badge>
+                      )}
+
+                      {job.is_featured && (
+                        <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">Featured</Badge>
+                      )}
+                    </div>
+
+                    <p className="text-lg text-gray-700 mb-3">{job.company_name}</p>
+
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-4">
+                      {job.location && (
+                        <div className="flex items-center">
+                          <MapPin className="h-4 w-4 mr-1" />
+                          {job.location}
+                        </div>
+                      )}
+                      <div className="flex items-center">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {new Date(job.posted_date).toLocaleDateString()}
+                      </div>
+                      {job.salary_range && (
+                        <div className="flex items-center">
+                          <DollarSign className="h-4 w-4 mr-1" />
+                          {job.salary_range}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      <Badge className={getJobTypeColor(job.job_type)}>{job.job_type}</Badge>
+                      <Badge className={getExperienceColor(job.experience_level)}>{job.experience_level}</Badge>
+                      {job.skills_required?.slice(0, 3).map((skill, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {skill}
+                        </Badge>
+                      ))}
+                    </div>
+
+                    <p className="text-gray-600 line-clamp-3">{job.description}</p>
+                  </div>
+
+                  <div className="flex flex-col space-y-2 mt-4 lg:mt-0 lg:ml-6">
+                    {job.is_private && !canAccessPrivateJobs() ? (
+                      <div className="text-center">
+                        <Button disabled className="w-full lg:w-auto mb-2">
+                          <Lock className="mr-2 h-4 w-4" />
+                          Premium Required
+                        </Button>
+                        <Link href="/pricing">
+                          <Button variant="outline" size="sm" className="w-full lg:w-auto">
+                            Upgrade Plan
+                          </Button>
+                        </Link>
+                      </div>
+                    ) : (
+                      <>
+                        <Button onClick={() => applyToJob(job.id)} className="w-full lg:w-auto">
+                          Apply Now
+                        </Button>
+                        {job.external_url && (
+                          <Button variant="outline" asChild className="w-full lg:w-auto">
+                            <a href={job.external_url} target="_blank" rel="noopener noreferrer">
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              View Details
+                            </a>
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Load More */}
+      {filteredJobs.length > 0 && (
+        <div className="text-center mt-8">
+          <Button variant="outline">Load More Jobs</Button>
+        </div>
+      )}
+    </div>
+  )
 }
